@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ImageTools · Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <form class="card login" id="f">
+    <h1>ImageTools</h1>
+    <input type="password" name="password" placeholder="Password" autofocus required>
+    <button>Log in</button>
+    <p class="err" id="e"></p>
+  </form>
+  <script>
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const r = await fetch('/login', { method: 'POST', body: JSON.stringify({ password: f.password.value }) });
+      r.ok ? location.reload() : (e.textContent = 'Wrong password');
+    };
+  </script>
+</body>
+</html>

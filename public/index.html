@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ImageTools</title>
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>ImageTools</h1>
+    <a id="agent" class="pill" href="/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify" target="_blank" title="Open the server's ChatGPT browser">…</a>
+  </header>
+  <main>
+    <section class="card">
+      <nav id="tabs"></nav>
+      <form id="form">
+        <p id="desc" class="muted"></p>
+        <div id="inputs" class="drops"></div>
+        <div id="fields"></div>
+        <button id="go" type="submit">Generate</button>
+        <p id="msg" class="err"></p>
+      </form>
+    </section>
+    <section>
+      <h2>Jobs</h2>
+      <div id="jobs"><p class="muted">No jobs yet.</p></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

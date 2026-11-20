@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD in .env}
+    volumes:
+      - data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+  # Free public HTTPS URL (https://<random>.trycloudflare.com) — no account or open ports needed.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://app:8080
+volumes:
+  data:

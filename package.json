@@ -1,0 +1,9 @@
+{
+  "name": "imagetools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  }
+}

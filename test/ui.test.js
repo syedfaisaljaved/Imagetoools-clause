@@ -1,0 +1,55 @@
+// Browser test of the web UI against the real server (agent simulated over its HTTP API).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { startServer } from '../server/server.js';
+
+let chromium;
+try { ({ chromium } = createRequire(import.meta.url)('playwright')); } catch {}
+const ICON = path.resolve(import.meta.dirname, '../public/icon.png');
+const URL = 'http://127.0.0.1:18280';
+let srv, browser, page;
+
+before(async () => {
+  if (!chromium) return;
+  srv = startServer({ port: 18280, agentPort: 18281, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'imgt-')), password: 'secret' });
+  browser = await chromium.launch();
+  page = await browser.newPage();
+});
+after(async () => { await browser?.close(); srv?.close(); });
+
+test('login, then validation error when an image is missing', { skip: !chromium }, async () => {
+  await page.goto(URL);
+  await page.fill('input[type=password]', 'wrong');
+  await page.click('button');
+  await page.getByText('Wrong password').waitFor();
+  await page.fill('input[type=password]', 'secret');
+  await page.click('button');
+  await page.getByText('Browser offline').waitFor();
+  await page.click('#tabs >> text=Apply fabric');
+  await page.setInputFiles('.drop[data-key=furniture] input', ICON);
+  await page.click('#go');
+  await page.getByText('Missing image: Fabric photo').waitFor();
+});
+
+test('submit restyle job → agent finishes it → result thumbnail shown', { skip: !chromium }, async () => {
+  await page.click('#tabs >> text=Restyle');
+  await page.setInputFiles('.drop[data-key=furniture] input', ICON);
+  await page.selectOption('select[name=fabric]', 'Boucle');
+  await page.fill('input[name=color]', 'cream');
+  await page.click('#go');
+  await page.locator('.badge.queued').waitFor();
+
+  const agent = (p, body) => fetch('http://127.0.0.1:18281' + p, body ? { method: 'POST', body: JSON.stringify(body) } : {}).then((r) => r.json());
+  const { job } = await agent('/agent/next');
+  assert.match(job.steps[0].prompt, /boucle.*cream/s);
+  await agent(`/agent/jobs/${job.id}/output`, { step: 0, image: fs.readFileSync(ICON).toString('base64') });
+  await agent(`/agent/jobs/${job.id}/finish`, {});
+
+  await page.locator('.badge.done').waitFor({ timeout: 8000 });
+  assert.equal(await page.locator('img[alt="result 1"]').count(), 1);
+  assert.equal(await page.locator('#agent').textContent(), 'Generating…'); // agent last reported busy
+});
