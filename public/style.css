@@ -10,6 +10,7 @@
 body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
 header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
 h1 { font-size: 18px; margin: 0; }
+#note { flex: 1; font-size: 12px; overflow-wrap: anywhere; }
 h2 { font-size: 16px; margin: 24px 0 12px; }
 main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
 .card, .job { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }

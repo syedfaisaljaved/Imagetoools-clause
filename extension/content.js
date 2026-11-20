@@ -1,10 +1,10 @@
 // Runs inside the chatgpt.com tab: polls the server for jobs and performs each step like a user would.
 // If ChatGPT changes its page, only SEL usually needs updating.
 const SEL = {
-  editor: '#prompt-textarea',
+  editor: '#prompt-textarea, .ProseMirror[contenteditable="true"], textarea[name="prompt-textarea"], form [contenteditable="true"], form textarea',
   fileInput: 'input[type="file"]',
-  send: '[data-testid="send-button"], #composer-submit-button',
-  stop: '[data-testid="stop-button"]',
+  send: '[data-testid="send-button"], #composer-submit-button, button[aria-label*="send" i]',
+  stop: '[data-testid="stop-button"], button[aria-label*="stop" i]',
   user: '[data-message-author-role="user"]',
   assistant: '[data-message-author-role="assistant"]',
 };
@@ -32,6 +32,12 @@ async function waitFor(fn, timeout, every = 500) {
 // Images produced by ChatGPT (not the ones we uploaded, not avatars/icons).
 const resultImages = () =>
   $$('main img').filter((img) => !img.closest(SEL.user) && (/generated image/i.test(img.alt) || img.naturalWidth >= 400));
+
+// What the agent sees: shown in the app so selector problems can be diagnosed remotely.
+const diagnose = () => {
+  const els = $$('textarea, [contenteditable="true"]').map((e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${e.className ? '.' + String(e.className).split(' ')[0] : ''}`);
+  return `Prompt box not found on ${location.pathname} ("${document.title}"). Inputs seen: ${els.join(', ') || 'none'}`;
+};
 
 const lastReply = () => $$(SEL.assistant).at(-1)?.innerText.trim().slice(0, 400) || '';
 
@@ -116,8 +122,10 @@ async function runJob(job) {
   await sleep(2000);
   for (;;) {
     try {
-      if (!$(SEL.editor)) {
-        await api('/agent/status', { state: 'login', note: 'ChatGPT needs attention: log in or complete the check in the remote browser.' });
+      if (document.visibilityState !== 'visible') {
+        // only the active tab works; other ChatGPT tabs stay idle
+      } else if (!$(SEL.editor)) {
+        await api('/agent/status', { state: 'login', note: diagnose() });
       } else if (location.pathname !== '/') {
         location.href = '/'; // every job starts in a fresh chat
         return;

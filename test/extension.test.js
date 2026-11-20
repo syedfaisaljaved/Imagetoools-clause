@@ -64,4 +64,5 @@ test('logged-out page reports "login" state', { skip: !chromium }, async () => {
   await page.waitForTimeout(3000);
   const state = await (await fetch('http://127.0.0.1:18180/api/state')).json();
   assert.equal(state.agent.state, 'login');
+  assert.match(state.agent.note, /Prompt box not found on \/ .*Inputs seen: none/);
 });

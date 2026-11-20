@@ -116,6 +116,7 @@ async function refresh() {
   const [cls, label] = AGENT[agent.state] || AGENT.offline;
   $('#agent').className = `pill ${cls}`;
   $('#agent').textContent = label;
+  $('#note').textContent = agent.state === 'login' ? agent.note : '';
   const key = JSON.stringify(jobs);
   if (key !== lastJobs) { // re-render only on change so images don't flicker
     lastJobs = key;
