@@ -1,11 +1,8 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const AGENT = {
-  ready: ['ok', 'ChatGPT ready'],
-  busy: ['busy', 'Generating…'],
-  login: ['warn', 'ChatGPT needs login — click to open'],
-  offline: ['off', 'Browser offline — click to open'],
-};
+const SITES = { chatgpt: 'ChatGPT', claude: 'Claude' };
+const STATE = { ready: ['ok', 'ready'], busy: ['busy', 'working…'], login: ['warn', 'needs login'], offline: ['off', 'offline'] };
+const VNC = '/vnc/vnc.html?autoconnect=1&resize=scale&path=vnc/websockify';
 let tools = [], tool, images = {}, lastJobs = '';
 
 const api = async (path, opts = {}) => {
@@ -16,7 +13,13 @@ const api = async (path, opts = {}) => {
   return data;
 };
 
-// Downscale big photos (max 2048px) so uploads stay fast; ChatGPT doesn't need more.
+// Per-browser memory for long text fields (e.g. Claude instructions).
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+
+// Downscale big photos (max 2048px) so uploads stay fast; the AIs don't need more.
 const readImage = (file) =>
   new Promise((resolve, reject) => {
     const img = new Image();
@@ -37,21 +40,28 @@ function selectTool(t) {
   $('#tabs').innerHTML = tools.map((x) => `<button type="button" data-id="${x.id}" class="${x === t ? 'on' : ''}">${esc(x.name)}</button>`).join('');
   $('#desc').textContent = t.description;
   $('#inputs').innerHTML = t.inputs.map((i) => `
-    <label class="drop" data-key="${i.key}"><input type="file" accept="image/*" hidden><span>${esc(i.label)}<br><small>click or drop</small></span></label>`).join('');
-  $('#fields').innerHTML = t.fields.map((f) => `<label class="field"><span>${esc(f.label)}</span>${control(f)}</label>`).join('');
+    <label class="drop" data-key="${i.key}"><input type="file" accept="image/*" ${i.multiple ? 'multiple' : ''} hidden>
+      <span>${esc(i.label)}<br><small>click or drop${i.multiple ? ' (one or more)' : ''}</small></span><b class="count"></b></label>`).join('');
+  $('#fields').innerHTML = t.fields.map((f) => `<label class="field ${f.type}"><span>${esc(f.label)}</span>${control(f)}</label>`).join('');
   $('#msg').textContent = '';
 }
 
-const control = (f) =>
-  f.type === 'select' ? `<select name="${f.key}">${f.options.map((o) => `<option ${o === f.default ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
-  : f.type === 'multi' ? `<div class="chips">${f.options.map((o) => `<label><input type="checkbox" name="${f.key}" value="${esc(o)}" ${f.default?.includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`
-  : `<input name="${f.key}" placeholder="${esc(f.placeholder)}">`;
+const control = (f) => {
+  if (f.type === 'select') return `<select name="${f.key}">${f.options.map((o) => `<option ${o === f.default ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (f.type === 'multi') return `<div class="chips">${f.options.map((o) => `<label><input type="checkbox" name="${f.key}" value="${esc(o)}" ${f.default?.includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
+  if (f.type === 'textarea') return `<textarea name="${f.key}" rows="6">${esc(store.get(`${tool.id}.${f.key}`) ?? f.default)}</textarea>`;
+  return `<input name="${f.key}" placeholder="${esc(f.placeholder)}">`;
+};
 
-async function setImage(drop, file) {
-  if (!file?.type.startsWith('image/')) return;
+async function setImages(drop, files) {
+  const multiple = tool.inputs.find((i) => i.key === drop.dataset.key).multiple;
+  files = [...files].filter((f) => f.type.startsWith('image/')).slice(0, multiple ? 10 : 1);
+  if (!files.length) return;
   try {
-    images[drop.dataset.key] = await readImage(file);
-    drop.style.backgroundImage = `url(${images[drop.dataset.key]})`;
+    const urls = await Promise.all(files.map(readImage));
+    images[drop.dataset.key] = multiple ? urls : urls[0];
+    drop.style.backgroundImage = `url(${urls[0]})`;
+    drop.querySelector('.count').textContent = urls.length > 1 ? urls.length : '';
     drop.classList.add('has');
   } catch (e) {
     $('#msg').textContent = e.message;
@@ -59,18 +69,21 @@ async function setImage(drop, file) {
 }
 
 $('#tabs').onclick = (e) => e.target.dataset.id && selectTool(tools.find((t) => t.id === e.target.dataset.id));
-$('#inputs').onchange = (e) => setImage(e.target.closest('.drop'), e.target.files[0]);
+$('#inputs').onchange = (e) => setImages(e.target.closest('.drop'), e.target.files);
 $('#inputs').ondragover = (e) => e.preventDefault();
 $('#inputs').ondrop = (e) => {
   e.preventDefault();
   const drop = e.target.closest('.drop');
-  if (drop) setImage(drop, e.dataTransfer.files[0]);
+  if (drop) setImages(drop, e.dataTransfer.files);
 };
 
 $('#form').onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target), options = {};
-  for (const f of tool.fields) options[f.key] = f.type === 'multi' ? fd.getAll(f.key) : fd.get(f.key);
+  for (const f of tool.fields) {
+    options[f.key] = f.type === 'multi' ? fd.getAll(f.key) : fd.get(f.key);
+    if (f.type === 'textarea') store.set(`${tool.id}.${f.key}`, options[f.key]);
+  }
   $('#go').disabled = true;
   try {
     await api('/api/jobs', { method: 'POST', body: JSON.stringify({ tool: tool.id, images, options }) });
@@ -93,7 +106,7 @@ $('#jobs').onclick = async (e) => {
 const jobHtml = (j) => {
   const name = tools.find((t) => t.id === j.tool)?.name || j.tool;
   const done = j.outputs.filter((o) => o.file).length;
-  const progress = j.status === 'running' ? ` ${j.outputs.length}/${j.total}` : '';
+  const progress = j.status === 'running' || (j.status === 'queued' && j.outputs.length) ? ` ${j.outputs.length}/${j.total}` : '';
   return `<article class="job">
     <div class="row">
       <b>${esc(name)}</b><span class="badge ${j.status}">${j.status}${progress}</span>
@@ -102,21 +115,23 @@ const jobHtml = (j) => {
       ${j.status === 'running' ? '' : `<button data-act="retry" data-id="${j.id}">Run again</button><button data-act="delete" data-id="${j.id}" class="ghost">Delete</button>`}
     </div>
     <div class="thumbs">
-      ${Object.values(j.inputs).map((f) => `<img class="in" src="/files/${j.id}/${f}" alt="input">`).join('')}
-      ${j.outputs.map((o) => o.file
+      ${Object.values(j.inputs).flat().map((f) => `<img class="in" src="/files/${j.id}/${f}" alt="input">`).join('')}
+      ${j.outputs.filter((o) => !o.text).map((o) => o.file
         ? `<a href="/files/${j.id}/${o.file}" target="_blank" download><img src="/files/${j.id}/${o.file}" alt="result ${o.step + 1}" loading="lazy"></a>`
         : `<div class="fail" title="${esc(o.error)}">✕ ${esc(o.error)}</div>`).join('')}
     </div>
+    ${j.outputs.filter((o) => o.text).map((o) => `<details><summary>Claude's prompt</summary><p>${esc(o.text)}</p></details>`).join('')}
     ${j.error && !done ? `<p class="err">${esc(j.error)}</p>` : ''}
   </article>`;
 };
 
 async function refresh() {
-  const { jobs, agent } = await api('/api/state');
-  const [cls, label] = AGENT[agent.state] || AGENT.offline;
-  $('#agent').className = `pill ${cls}`;
-  $('#agent').textContent = label;
-  $('#note').textContent = agent.state === 'login' ? agent.note : '';
+  const { jobs, agents } = await api('/api/state');
+  $('#agents').innerHTML = Object.entries(SITES).map(([site, label]) => {
+    const [cls, text] = STATE[agents[site].state] || STATE.offline;
+    return `<a class="pill ${cls}" href="${VNC}" target="_blank" title="Open the server's browser">${label} ${text}</a>`;
+  }).join('');
+  $('#note').textContent = Object.entries(agents).filter(([, a]) => a.state === 'login').map(([s, a]) => `${SITES[s]}: ${a.note}`).join(' | ');
   const key = JSON.stringify(jobs);
   if (key !== lastJobs) { // re-render only on change so images don't flicker
     lastJobs = key;

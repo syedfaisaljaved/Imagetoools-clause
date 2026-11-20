@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Minimal stand-in for claude.ai with the same selectors the extension relies on. -->
+<html><body><main></main>
+<div class="ProseMirror" contenteditable="true"></div>
+<input type="file" multiple>
+<button aria-label="Send message">Send</button>
+<script>
+  const ed = document.querySelector('.ProseMirror'), main = document.querySelector('main');
+  const input = document.querySelector('input[type=file]');
+  input.addEventListener('change', () => (window.uploaded = input.files.length));
+  document.querySelector('button').onclick = () => {
+    const text = ed.innerText;
+    ed.innerText = '';
+    history.pushState({}, '', '/chat/conv-1');
+    main.insertAdjacentHTML('beforeend', `<div data-testid="user-message">${text}</div><div data-is-streaming="true">Drawing prompt:</div>`);
+    setTimeout(() => {
+      const r = main.lastElementChild;
+      r.textContent = `Technical line drawing of the sofa from ${window.uploaded} photos`;
+      r.dataset.isStreaming = 'false';
+    }, 600);
+  };
+</script></body></html>

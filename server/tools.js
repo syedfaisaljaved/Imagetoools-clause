@@ -1,5 +1,6 @@
-// Each tool: form schema for the UI + build() that turns form values into ChatGPT steps.
-// A step = one prompt in the same conversation; `images` are input keys attached to that message.
+// Each tool: form schema for the UI + build() that turns form values into steps.
+// A step runs on a `site` ('chatgpt' default, or 'claude'). Consecutive steps on the same site share one chat.
+// `images` are input keys attached to that message. '{{text}}' in a prompt is replaced by the last Claude reply.
 
 const KEEP = 'Keep the exact same product: identical shape, proportions, silhouette, stitching, seams, legs, hardware and every design detail. Do not add, remove or redesign anything.';
 const PHOTO = 'Photorealistic professional product photography, soft even studio lighting, natural shadows, sharp focus, high resolution, true-to-life colors.';
@@ -25,6 +26,10 @@ const ANGLES = {
 
 const FABRICS = ['Keep original', 'Velvet', 'Linen', 'Boucle', 'Chenille', 'Leather', 'Faux leather', 'Cotton twill', 'Jacquard', 'Corduroy'];
 const FINISHES = ['Keep original', 'Walnut', 'Natural oak', 'Teak', 'Dark espresso', 'Matte black', 'White lacquer', 'Brushed gold metal', 'Chrome'];
+
+const DRAWING_INSTRUCTIONS = `You are an expert furniture designer and technical illustrator. Study the attached product photo(s) carefully — they all show the same product.
+Write ONE detailed prompt for an AI image generator to create a clean professional technical drawing of this exact product: black line art on a white background, orthographic front, side and top views plus one 3/4 perspective view, accurate proportions, every visible construction detail (frame, legs, joints, cushions, seams, hardware), with overall dimension lines.
+Describe the product's shape and details precisely so the drawing matches the photos exactly.`;
 
 const extra = (notes) => (notes?.trim() ? ` Additional instructions: ${notes.trim()}` : '');
 
@@ -87,23 +92,41 @@ export const tools = [
       }];
     },
   },
+  {
+    id: 'drawing',
+    name: 'Drawing',
+    description: 'One or more product photos → Claude writes the drawing prompt → ChatGPT draws it.',
+    inputs: [{ key: 'photos', label: 'Product photo(s)', multiple: true }],
+    fields: [
+      { key: 'instructions', label: 'Claude instructions (saved in this browser)', type: 'textarea', default: DRAWING_INSTRUCTIONS },
+      { key: 'notes', label: 'Notes (optional)', type: 'text' },
+    ],
+    build: ({ instructions, notes }) => [
+      {
+        site: 'claude',
+        images: ['photos'],
+        prompt: `${instructions.trim()}${extra(notes)}\n\nReply with ONLY the final image prompt — no introduction, no headings, no explanation.`,
+      },
+      { images: ['photos'], prompt: `{{text}}\n\nUse the attached photo(s) as the exact reference for the product. ${NOW}` },
+    ],
+  },
 ];
 
 const byId = Object.fromEntries(tools.map((t) => [t.id, t]));
 
-// Validates input, fills defaults and returns the ChatGPT steps. Throws on bad input.
+// Validates input, fills defaults and returns the steps (each with an explicit site). Throws on bad input.
 export function buildSteps(toolId, images, options = {}) {
   const tool = byId[toolId];
   if (!tool) throw new Error(`Unknown tool: ${toolId}`);
-  for (const { key, label } of tool.inputs) if (!images?.[key]) throw new Error(`Missing image: ${label}`);
+  for (const { key, label } of tool.inputs) if (!images?.[key]?.length) throw new Error(`Missing image: ${label}`);
   const opts = {};
   for (const f of tool.fields) {
-    const v = options[f.key] ?? f.default ?? '';
+    const v = options[f.key] || f.default || '';
     if (f.type === 'select' && !f.options.includes(v)) throw new Error(`Invalid ${f.label}`);
     if (f.type === 'multi' && (!Array.isArray(v) || !v.length || v.some((x) => !f.options.includes(x)))) throw new Error(`Pick at least one: ${f.label}`);
-    opts[f.key] = f.type === 'text' ? String(v).slice(0, 500) : v;
+    opts[f.key] = /text/.test(f.type) ? String(v).slice(0, 4000) : v;
   }
-  return tool.build(opts);
+  return tool.build(opts).map((s) => ({ site: 'chatgpt', ...s }));
 }
 
 // UI-safe view (no functions).

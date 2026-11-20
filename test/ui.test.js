@@ -28,7 +28,7 @@ test('login, then validation error when an image is missing', { skip: !chromium 
   await page.getByText('Wrong password').waitFor();
   await page.fill('input[type=password]', 'secret');
   await page.click('button');
-  await page.getByText('Browser offline').waitFor();
+  await page.getByText('ChatGPT offline').waitFor();
   await page.click('#tabs >> text=Apply fabric');
   await page.setInputFiles('.drop[data-key=furniture] input', ICON);
   await page.click('#go');
@@ -51,5 +51,5 @@ test('submit restyle job → agent finishes it → result thumbnail shown', { sk
 
   await page.locator('.badge.done').waitFor({ timeout: 8000 });
   assert.equal(await page.locator('img[alt="result 1"]').count(), 1);
-  assert.equal(await page.locator('#agent').textContent(), 'Generating…'); // agent last reported busy
+  assert.equal(await page.locator('#agents .pill').first().textContent(), 'ChatGPT working…'); // agent last reported busy
 });

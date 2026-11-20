@@ -16,7 +16,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 
 export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join(ROOT, 'data'), password = '', vncPort = 6080 } = {}) {
   const store = createStore(dataDir);
-  const agent = { state: 'offline', note: '', lastSeen: 0 };
+  const SITES = ['chatgpt', 'claude'];
+  const agents = Object.fromEntries(SITES.map((s) => [s, { state: 'offline', note: '', lastSeen: 0 }]));
+  const siteParam = (url) => (SITES.includes(url.searchParams.get('site')) ? url.searchParams.get('site') : 'chatgpt');
   const token = password && createHash('sha256').update('imgtools:' + password).digest('hex');
 
   const send = (res, code, body, type = 'application/json') => {
@@ -44,52 +46,55 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     const c = /(?:^|;\s*)auth=([a-f0-9]{64})/.exec(req.headers.cookie || '')?.[1];
     return !!c && timingSafeEqual(Buffer.from(c), Buffer.from(token));
   };
-  // Job as the extension needs it: prompts + input images inlined as base64.
-  const agentJob = (job) => ({
+  // The steps of one run as the extension needs them: prompts (with {{text}} filled) + input images as base64.
+  const agentJob = ({ job, from, to }) => ({
     id: job.id,
-    steps: job.steps.map(({ prompt, images }) => ({
-      prompt,
-      images: images.map((key) => {
-        const name = job.inputs[key];
-        return { name, type: TYPES[path.extname(name)], data: fs.readFileSync(path.join(store.filesDir, job.id, name)).toString('base64') };
-      }),
+    steps: job.steps.slice(from, to).map(({ prompt, images }, i) => ({
+      index: from + i,
+      prompt: prompt.replaceAll('{{text}}', store.lastText(job)),
+      images: images.flatMap((key) => [job.inputs[key]].flat()).map((name) => ({
+        name,
+        type: TYPES[path.extname(name)],
+        data: fs.readFileSync(path.join(store.filesDir, job.id, name)).toString('base64'),
+      })),
     })),
   });
-  const agentStatus = () => ({ ...agent, state: Date.now() - agent.lastSeen < 20e3 ? agent.state : 'offline' });
+  const agentStatus = () =>
+    Object.fromEntries(SITES.map((s) => [s, { ...agents[s], state: Date.now() - agents[s].lastSeen < 20e3 ? agents[s].state : 'offline' }]));
 
-  // Routes: [method, regex, handler(req, res, ...params)]
+  // Routes: [method, regex, handler(req, res, url, ...params)]
   const appRoutes = [
-    ['GET', /^\/api\/state$/, (req, res) => send(res, 200, { tools: toolSchemas, jobs: store.list().map(publicJob), agent: agentStatus() })],
+    ['GET', /^\/api\/state$/, (req, res) => send(res, 200, { tools: toolSchemas, jobs: store.list().map(publicJob), agents: agentStatus() })],
     ['POST', /^\/api\/jobs$/, async (req, res) => {
       const { tool, images, options } = await readJson(req);
       send(res, 201, publicJob(store.create(tool, images, options)));
     }],
-    ['POST', /^\/api\/jobs\/(\w+)\/retry$/, (req, res, id) => send(res, 200, publicJob(store.retry(id)))],
-    ['DELETE', /^\/api\/jobs\/(\w+)$/, (req, res, id) => (store.remove(id), send(res, 200, { ok: true }))],
-    ['GET', /^\/files\/(\w+)\/([\w.-]+)$/, (req, res, id, name) => sendFile(res, path.join(store.filesDir, id, name))],
+    ['POST', /^\/api\/jobs\/(\w+)\/retry$/, (req, res, url, id) => send(res, 200, publicJob(store.retry(id)))],
+    ['DELETE', /^\/api\/jobs\/(\w+)$/, (req, res, url, id) => (store.remove(id), send(res, 200, { ok: true }))],
+    ['GET', /^\/files\/(\w+)\/([\w.-]+)$/, (req, res, url, id, name) => sendFile(res, path.join(store.filesDir, id, name))],
     ['GET', /^\/vnc\//, (req, res) => proxyHttp(req, res)],
-    ['GET', /^\/(?:([\w-]+\.\w+))?$/, (req, res, f = 'index.html') => sendFile(res, path.join(PUBLIC, f))],
+    ['GET', /^\/(?:([\w-]+\.\w+))?$/, (req, res, url, f = 'index.html') => sendFile(res, path.join(PUBLIC, f))],
   ];
 
   const agentRoutes = [
-    ['GET', /^\/agent\/next$/, (req, res) => {
-      Object.assign(agent, { state: 'ready', note: '', lastSeen: Date.now() });
-      const job = store.claimNext();
-      if (job) agent.state = 'busy';
-      send(res, 200, { job: job ? agentJob(job) : null });
+    ['GET', /^\/agent\/next$/, (req, res, url) => {
+      const site = siteParam(url), run = store.claimNext(site, url.searchParams.get('agent') || '');
+      Object.assign(agents[site], { state: run ? 'busy' : 'ready', note: '', lastSeen: Date.now() });
+      send(res, 200, { job: run ? agentJob(run) : null });
     }],
-    ['POST', /^\/agent\/status$/, async (req, res) => {
-      const { state, note = '' } = await readJson(req);
-      Object.assign(agent, { state, note: String(note).slice(0, 300), lastSeen: Date.now() });
+    ['POST', /^\/agent\/status$/, async (req, res, url) => {
+      const { state, note = '' } = await readJson(req), a = agents[siteParam(url)];
+      // An extra logged-out tab must not hide a working one.
+      if (a.state === 'offline' || a.state === state || Date.now() - a.lastSeen > 10e3) Object.assign(a, { state, note: String(note).slice(0, 300), lastSeen: Date.now() });
       send(res, 200, { ok: true });
     }],
-    ['POST', /^\/agent\/jobs\/(\w+)\/output$/, async (req, res, id) => {
-      const { step, image, error } = await readJson(req);
-      agent.lastSeen = Date.now();
-      store.addOutput(id, step, { image, error });
+    ['POST', /^\/agent\/jobs\/(\w+)\/output$/, async (req, res, url, id) => {
+      const { step, image, text, error } = await readJson(req);
+      agents[siteParam(url)].lastSeen = Date.now();
+      store.addOutput(id, step, { image, text: text && String(text).slice(0, 20000), error });
       send(res, 200, { ok: true });
     }],
-    ['POST', /^\/agent\/jobs\/(\w+)\/finish$/, async (req, res, id) => {
+    ['POST', /^\/agent\/jobs\/(\w+)\/finish$/, async (req, res, url, id) => {
       const { error } = await readJson(req);
       store.finish(id, error);
       send(res, 200, { ok: true });
@@ -102,7 +107,7 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
       if (guard && !(await guard(req, res, url))) return;
       for (const [method, re, handler] of routes) {
         const m = req.method === method && re.exec(url.pathname);
-        if (m) return await handler(req, res, ...m.slice(1).filter((x) => x !== undefined));
+        if (m) return await handler(req, res, url, ...m.slice(1).filter((x) => x !== undefined));
       }
       send(res, 404, { error: 'Not found' });
     } catch (e) {

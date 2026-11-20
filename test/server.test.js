@@ -46,13 +46,43 @@ test('full job lifecycle: create → agent claims → output → done → file s
   state = await (await call(app, '/api/state')).json();
   const done = state.jobs[0];
   assert.equal(done.status, 'done');
-  assert.equal(state.agent.state, 'busy');
+  assert.equal(state.agents.chatgpt.state, 'busy');
   const img = await call(app, `/files/${job.id}/${done.outputs[0].file}`);
   assert.equal(img.headers.get('content-type'), 'image/png');
   assert.equal(Buffer.from(await img.arrayBuffer()).toString('base64'), PNG);
 
   assert.equal((await call(app, `/api/jobs/${job.id}`, undefined, 'DELETE')).status, 200);
   assert.equal((await (await call(app, '/api/state')).json()).jobs.length, 0);
+});
+
+test('drawing job runs on Claude first, then ChatGPT gets the Claude prompt + all photos', async () => {
+  const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`, `data:image/png;base64,${PNG}`] } })).json();
+  assert.equal((await (await call(agent, '/agent/next?site=chatgpt&agent=g')).json()).job, null); // not ChatGPT's turn yet
+
+  const { job: c } = await (await call(agent, '/agent/next?site=claude&agent=c')).json();
+  assert.equal(c.steps.length, 1);
+  assert.equal(c.steps[0].images.length, 2);
+  await call(agent, `/agent/jobs/${job.id}/output?site=claude`, { step: 0, text: 'Line drawing of a sofa' });
+  await call(agent, `/agent/jobs/${job.id}/finish?site=claude`, {});
+
+  const { job: g } = await (await call(agent, '/agent/next?site=chatgpt&agent=g')).json();
+  assert.equal(g.steps[0].index, 1);
+  assert.match(g.steps[0].prompt, /^Line drawing of a sofa\n/);
+  assert.equal(g.steps[0].images.length, 2);
+  await call(agent, `/agent/jobs/${job.id}/output`, { step: 1, image: PNG });
+  await call(agent, `/agent/jobs/${job.id}/finish`, {});
+  const state = await (await call(app, '/api/state')).json();
+  assert.equal(state.jobs.find((j) => j.id === job.id).status, 'done');
+});
+
+test('Claude failure fails the whole job; a second tab polling does not interrupt a running job', async () => {
+  const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`] } })).json();
+  await call(agent, '/agent/next?site=claude&agent=c1');
+  await call(agent, '/agent/next?site=claude&agent=c2'); // other tab: must not interrupt c1's job
+  assert.equal(srv.store.get(job.id).status, 'running');
+  await call(agent, `/agent/jobs/${job.id}/output?site=claude`, { step: 0, error: 'Claude gave no reply' });
+  await call(agent, `/agent/jobs/${job.id}/finish?site=claude`, { error: 'Claude gave no reply' });
+  assert.equal(srv.store.get(job.id).status, 'failed');
 });
 
 test('rejects bad input', async () => {

@@ -18,3 +18,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   (msg.download ? download(msg.download) : call(msg.path, msg.body)).then(reply, (e) => reply({ error: e.message }));
   return true; // async reply
 });
+
+// Keep one window per site (separate windows stay "visible", so neither gets throttled).
+const SITES = { 'https://chatgpt.com/*': 'https://chatgpt.com/', 'https://claude.ai/*': 'https://claude.ai/new' };
+async function ensureWindows() {
+  await new Promise((r) => setTimeout(r, 5000)); // let startup tabs load first
+  for (const [pattern, url] of Object.entries(SITES)) {
+    if (!(await chrome.tabs.query({ url: pattern })).length) await chrome.windows.create({ url, width: 1280, height: 900 });
+  }
+}
+chrome.runtime.onStartup.addListener(ensureWindows);
+chrome.runtime.onInstalled.addListener(ensureWindows);

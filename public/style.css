@@ -19,7 +19,15 @@ main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
 button { font: inherit; border: 0; border-radius: 8px; padding: 8px 14px; background: var(--accent); color: #fff; cursor: pointer; }
 button:disabled { opacity: .5; cursor: wait; }
 button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-input, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+#agents { display: flex; gap: 6px; flex-wrap: wrap; }
+.field.textarea { grid-column: 1 / -1; }
+.drop { position: relative; }
+.count:not(:empty) { position: absolute; top: 6px; right: 6px; background: var(--accent); color: #fff; border-radius: 99px; padding: 0 8px; font-size: 13px; }
+details { margin-top: 10px; font-size: 13px; }
+details p { white-space: pre-wrap; background: var(--bg); padding: 10px; border-radius: 8px; }
+.badge.queued { background: var(--line); }
+input, select, textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+textarea { font: 13px/1.4 ui-monospace, monospace; resize: vertical; }
 
 #tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 #tabs button { background: transparent; color: var(--text); border: 1px solid var(--line); }
