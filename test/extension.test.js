@@ -80,7 +80,7 @@ test('multi-angle job runs through ChatGPT tab and saves every image', { skip: !
 });
 
 test('drawing job: Claude writes the prompt from all photos, ChatGPT draws it, both chats deleted', { skip: !chromium }, async () => {
-  const job = srv.store.create('drawing', { photos: [img, img] }, {});
+  const job = srv.store.create('outline', { photos: [img, img] }, {});
   const done = await waitJob(job.id);
   assert.equal(done.status, 'done', done.error);
   assert.equal(done.outputs[0].text, 'Technical line drawing of the sofa from 2 photos');

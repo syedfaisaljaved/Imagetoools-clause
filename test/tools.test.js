@@ -29,7 +29,7 @@ test('factory checkbox attaches the factory photo last and swaps the background'
   assert.match(fac.prompt, /factory photo \(the last attached image\)/);
   const angles = buildSteps('angles', { product: 'a' }, { angles: ['Front', 'Back'], factory: 'on' });
   assert.deepEqual(angles.map((s) => s.images), [['product', 'factory'], []]);
-  const [, draw] = buildSteps('drawing', { photos: ['a'] }, { factory: true });
+  const [, draw] = buildSteps('specs', { photos: ['a'] }, { factory: true });
   assert.deepEqual(draw.images, ['photos', 'factory']);
 });
 
@@ -50,9 +50,17 @@ test('factory showcase: one phone-style shot per pose, factory attached on the f
 });
 
 test('drawing with parts: Claude then ChatGPT for each part, each prompt about that part', () => {
-  const steps = buildSteps('drawing', { photos: ['a'] }, { parts: 'headboard, footboard ,' });
+  const steps = buildSteps('specs', { photos: ['a'] }, { parts: 'headboard, footboard ,' });
   assert.deepEqual(steps.map((s) => s.site), ['claude', 'chatgpt', 'claude', 'chatgpt']);
   assert.match(steps[0].prompt, /ONLY the headboard/);
   assert.match(steps[3].prompt, /^\{\{text\}\}[\s\S]*draw only its footboard/);
-  assert.equal(buildSteps('drawing', { photos: ['a'] }, {}).length, 2); // no parts → one drawing of the whole product
+  assert.equal(buildSteps('specs', { photos: ['a'] }, {}).length, 2); // no parts → one drawing of the whole product
+});
+
+test('furniture drawing (outline): carving line art, no factory option; old "drawing" jobs map to specs', () => {
+  const [claude, gpt] = buildSteps('outline', { photos: ['a'] }, { parts: 'headboard', factory: true });
+  assert.match(claude.prompt, /line drawing of this exact design for wood carving[\s\S]*ONLY the headboard/);
+  assert.match(gpt.prompt, /ready to trace onto wood for carving/);
+  assert.deepEqual(gpt.images, ['photos']); // factory checkbox doesn't exist here
+  assert.match(buildSteps('drawing', { photos: ['a'] }, {})[0].prompt, /technical drawing/);
 });

@@ -53,11 +53,57 @@ const LIGHT = {
 };
 const PHONE = 'It must look like a casual, unedited smartphone photo: vertical portrait frame, handheld, natural phone-camera HDR and sharpness, product fully in frame and centered, filling about two thirds of the height. No studio lighting, no props, no people, no text or watermark.';
 
-const DRAWING_INSTRUCTIONS = `You are an expert furniture designer and technical illustrator. Study the attached product photo(s) carefully — they all show the same product.
-Write ONE detailed prompt for an AI image generator to create a clean professional technical drawing of this exact product: black line art on a white background, orthographic front, side and top views plus one 3/4 perspective view, accurate proportions, every visible construction detail (frame, legs, joints, cushions, seams, hardware), with overall dimension lines.
-Describe the product's shape and details precisely so the drawing matches the photos exactly.`;
-
 const extra = (notes) => (notes?.trim() ? ` Additional instructions: ${notes.trim()}` : '');
+
+// Drawing tools: per part, Claude writes the image prompt from the photos, then ChatGPT draws it
+// from that prompt + the photos. `instructions` are Claude's default brief (editable in the UI).
+const SPECS_TOOL = {
+  id: 'specs',
+  name: 'Furniture specs sheet',
+  description: 'Product photo(s) → technical sheet: front/side/top views with dimensions and specs.',
+  factory: true,
+  finish: '',
+  instructions: `You are an expert furniture designer and technical illustrator. Study the attached product photo(s) carefully — they all show the same product.
+Write ONE detailed prompt for an AI image generator to create a clean professional technical drawing of this exact product: black line art on a white background, orthographic front, side and top views plus one 3/4 perspective view, accurate proportions, every visible construction detail (frame, legs, joints, cushions, seams, hardware), with overall dimension lines.
+Describe the product's shape and details precisely so the drawing matches the photos exactly.`,
+};
+const OUTLINE_TOOL = {
+  id: 'outline',
+  name: 'Furniture drawing',
+  description: 'Product photo(s) → clean black line-art outline of the design, ready for carving.',
+  factory: false,
+  finish: ' The result must be clean black line art on a pure white background, ready to trace onto wood for carving.',
+  instructions: `You are an expert furniture carving designer. Study the attached product photo(s) carefully — they all show the same product.
+Write ONE detailed prompt for an AI image generator to create a clean black-and-white line drawing of this exact design for wood carving: straight-on front elevation, symmetrical wherever the product is, crisp black outlines of even weight on a pure white background. Every carved detail must be clear line art — acanthus leaves, scrolls, rosettes, flowers, shells, mouldings, beading, rope twists, cabriole legs. No shading, no hatching, no grey, no colour, no shadows, no background, no dimensions, no text.
+Describe the overall silhouette and every carved motif precisely, position by position, so the drawing matches the photos exactly.`,
+};
+
+function claudeDrawingTool({ id, name, description, instructions, finish, factory: allowFactory }) {
+  return {
+    id, name, description,
+    inputs: [{ key: 'photos', label: 'Product photo(s)', multiple: true }],
+    fields: [
+      { key: 'parts', label: 'Specific parts (optional, comma-separated — one drawing each)', type: 'text', placeholder: 'e.g. headboard, footboard' },
+      { key: 'instructions', label: 'Claude instructions (saved in this browser)', type: 'textarea', default: instructions },
+      { key: 'notes', label: 'Notes (optional)', type: 'text' },
+      ...(allowFactory ? [FACTORY_FIELD] : []),
+    ],
+    build: ({ parts, instructions, notes, factory }) => {
+      const list = parts.split(',').map((p) => p.trim()).filter(Boolean).slice(0, 8);
+      return (list.length ? list : [null]).flatMap((part) => [
+        {
+          site: 'claude',
+          images: ['photos'],
+          prompt: `${instructions.trim()}${part ? `\n\nIMPORTANT: the drawing must show ONLY the ${part} of this product, isolated on its own (not the whole piece). Describe the ${part} in full detail exactly as seen in the photos: shape, proportions, carving and ornament, joinery.` : ''}${extra(notes)}\n\nReply with ONLY the final image prompt — no introduction, no headings, no explanation.`,
+        },
+        {
+          images: plusFactory(['photos'], factory),
+          prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product${part ? ` — draw only its ${part}` : ''}.${finish}${factory ? ` Instead of a plain background, show it ${FACTORY}.` : ''} ${NOW}`,
+        },
+      ]);
+    },
+  };
+}
 
 export const tools = [
   {
@@ -121,33 +167,8 @@ export const tools = [
       }];
     },
   },
-  {
-    id: 'drawing',
-    name: 'Drawing',
-    description: 'Product photo(s) → Claude writes the drawing prompt → ChatGPT draws it. Optionally one drawing per part.',
-    inputs: [{ key: 'photos', label: 'Product photo(s)', multiple: true }],
-    fields: [
-      { key: 'parts', label: 'Specific parts (optional, comma-separated — one drawing each)', type: 'text', placeholder: 'e.g. headboard, footboard' },
-      { key: 'instructions', label: 'Claude instructions (saved in this browser)', type: 'textarea', default: DRAWING_INSTRUCTIONS },
-      { key: 'notes', label: 'Notes (optional)', type: 'text' },
-      FACTORY_FIELD,
-    ],
-    // Per part: Claude writes the prompt from the photos, then ChatGPT draws it from that prompt + the photos.
-    build: ({ parts, instructions, notes, factory }) => {
-      const list = parts.split(',').map((p) => p.trim()).filter(Boolean).slice(0, 8);
-      return (list.length ? list : [null]).flatMap((part) => [
-        {
-          site: 'claude',
-          images: ['photos'],
-          prompt: `${instructions.trim()}${part ? `\n\nIMPORTANT: the drawing must show ONLY the ${part} of this product, isolated on its own (not the whole piece). Describe the ${part} in full detail exactly as seen in the photos: shape, proportions, carving and ornament, joinery.` : ''}${extra(notes)}\n\nReply with ONLY the final image prompt — no introduction, no headings, no explanation.`,
-        },
-        {
-          images: plusFactory(['photos'], factory),
-          prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product${part ? ` — draw only its ${part}` : ''}.${factory ? ` Instead of a plain background, show it ${FACTORY}.` : ''} ${NOW}`,
-        },
-      ]);
-    },
-  },
+  claudeDrawingTool(SPECS_TOOL),
+  claudeDrawingTool(OUTLINE_TOOL),
   {
     id: 'wood',
     name: 'Raw wood',
@@ -184,7 +205,7 @@ const byId = Object.fromEntries(tools.map((t) => [t.id, t]));
 
 // Validates input, fills defaults and returns the steps (each with an explicit site). Throws on bad input.
 export function buildSteps(toolId, images, options = {}) {
-  const tool = byId[toolId];
+  const tool = byId[toolId === 'drawing' ? 'specs' : toolId]; // 'drawing' = specs sheet's old id (older jobs)
   if (!tool) throw new Error(`Unknown tool: ${toolId}`);
   for (const { key, label } of tool.inputs) if (!images?.[key]?.length) throw new Error(`Missing image: ${label}`);
   const opts = {};

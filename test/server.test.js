@@ -76,7 +76,7 @@ test('drawing job runs on Claude first, then ChatGPT gets the Claude prompt + al
 });
 
 test('drawing per part alternates Claude and ChatGPT, each ChatGPT step gets its own Claude prompt', async () => {
-  const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`] }, options: { parts: 'headboard, footboard' } })).json();
+  const job = await (await call(app, '/api/jobs', { tool: 'specs', images: { photos: [`data:image/png;base64,${PNG}`] }, options: { parts: 'headboard, footboard' } })).json();
   for (const [i, part] of ['headboard', 'footboard'].entries()) {
     const { job: c } = await (await call(agent, '/agent/next?site=claude&agent=c')).json();
     assert.equal(c.steps[0].index, i * 2);
@@ -91,7 +91,7 @@ test('drawing per part alternates Claude and ChatGPT, each ChatGPT step gets its
 });
 
 test('Claude failure fails the whole job; a second tab polling does not interrupt a running job', async () => {
-  const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`] } })).json();
+  const job = await (await call(app, '/api/jobs', { tool: 'outline', images: { photos: [`data:image/png;base64,${PNG}`] } })).json();
   await call(agent, '/agent/next?site=claude&agent=c1');
   await call(agent, '/agent/next?site=claude&agent=c2'); // other tab: must not interrupt c1's job
   assert.equal(srv.store.get(job.id).status, 'running');
