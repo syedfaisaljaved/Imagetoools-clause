@@ -85,6 +85,13 @@ test('Claude failure fails the whole job; a second tab polling does not interrup
   assert.equal(srv.store.get(job.id).status, 'failed');
 });
 
+test('"show window" request is delivered once, only to that site', async () => {
+  await call(app, '/api/front', { site: 'claude' });
+  assert.equal((await (await call(agent, '/agent/next?site=chatgpt&agent=g')).json()).front, false);
+  assert.equal((await (await call(agent, '/agent/status?site=claude', { state: 'login' })).json()).front, true);
+  assert.equal((await (await call(agent, '/agent/next?site=claude&agent=c')).json()).front, false);
+});
+
 test('rejects bad input', async () => {
   const r = await call(app, '/api/jobs', { tool: 'angles', images: { product: 'data:text/plain;base64,AA' } });
   assert.equal(r.status, 400);

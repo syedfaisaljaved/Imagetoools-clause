@@ -61,6 +61,9 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
   });
   const agentStatus = () =>
     Object.fromEntries(SITES.map((s) => [s, { ...agents[s], state: Date.now() - agents[s].lastSeen < 20e3 ? agents[s].state : 'offline' }]));
+  // Site whose window the user wants in front of the remote screen; handed to that site's tab on its next poll.
+  let front = null;
+  const takeFront = (site) => front === site && !(front = null);
 
   // Routes: [method, regex, handler(req, res, url, ...params)]
   const appRoutes = [
@@ -68,6 +71,11 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     ['POST', /^\/api\/jobs$/, async (req, res) => {
       const { tool, images, options } = await readJson(req);
       send(res, 201, publicJob(store.create(tool, images, options)));
+    }],
+    ['POST', /^\/api\/front$/, async (req, res) => {
+      const { site } = await readJson(req, 1e3);
+      front = SITES.includes(site) ? site : null;
+      send(res, 200, { ok: true });
     }],
     ['POST', /^\/api\/jobs\/(\w+)\/retry$/, (req, res, url, id) => send(res, 200, publicJob(store.retry(id)))],
     ['DELETE', /^\/api\/jobs\/(\w+)$/, (req, res, url, id) => (store.remove(id), send(res, 200, { ok: true }))],
@@ -80,13 +88,13 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     ['GET', /^\/agent\/next$/, (req, res, url) => {
       const site = siteParam(url), run = store.claimNext(site, url.searchParams.get('agent') || '');
       Object.assign(agents[site], { state: run ? 'busy' : 'ready', note: '', lastSeen: Date.now() });
-      send(res, 200, { job: run ? agentJob(run) : null });
+      send(res, 200, { job: run ? agentJob(run) : null, front: takeFront(site) });
     }],
     ['POST', /^\/agent\/status$/, async (req, res, url) => {
-      const { state, note = '' } = await readJson(req), a = agents[siteParam(url)];
+      const site = siteParam(url), { state, note = '' } = await readJson(req), a = agents[site];
       // An extra logged-out tab must not hide a working one.
       if (a.state === 'offline' || a.state === state || Date.now() - a.lastSeen > 10e3) Object.assign(a, { state, note: String(note).slice(0, 300), lastSeen: Date.now() });
-      send(res, 200, { ok: true });
+      send(res, 200, { ok: true, front: takeFront(site) });
     }],
     ['POST', /^\/agent\/jobs\/(\w+)\/output$/, async (req, res, url, id) => {
       const { step, image, text, error } = await readJson(req);

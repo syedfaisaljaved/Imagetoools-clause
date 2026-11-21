@@ -34,6 +34,7 @@ async function api(path, body) {
   const sep = path.includes('?') ? '&' : '?';
   const r = await chrome.runtime.sendMessage({ path: `${path}${sep}site=${SITE}&agent=${AGENT_ID}`, body });
   if (r?.error) throw new Error(r.error);
+  if (r?.front) chrome.runtime.sendMessage({ focus: true }); // user asked to see this site's window
   return r;
 }
 

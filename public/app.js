@@ -96,6 +96,12 @@ $('#form').onsubmit = async (e) => {
   }
 };
 
+// Bring that site's window to the front of the remote screen, then the link opens it.
+$('#agents').onclick = (e) => {
+  const site = e.target.closest('[data-site]')?.dataset.site;
+  if (site) api('/api/front', { method: 'POST', body: JSON.stringify({ site }) }).catch(() => {});
+};
+
 $('#jobs').onclick = async (e) => {
   const { act, id } = e.target.dataset;
   if (!act || (act === 'delete' && !confirm('Delete this job and its images?'))) return;
@@ -129,7 +135,7 @@ async function refresh() {
   const { jobs, agents } = await api('/api/state');
   $('#agents').innerHTML = Object.entries(SITES).map(([site, label]) => {
     const [cls, text] = STATE[agents[site].state] || STATE.offline;
-    return `<a class="pill ${cls}" href="${VNC}" target="_blank" title="Open the server's browser">${label} ${text}</a>`;
+    return `<a class="pill ${cls}" href="${VNC}" target="_blank" data-site="${site}" title="Show ${label} in the server's browser">${label} ${text}</a>`;
   }).join('');
   $('#note').textContent = Object.entries(agents).filter(([, a]) => a.state === 'login').map(([s, a]) => `${SITES[s]}: ${a.note}`).join(' | ');
   const key = JSON.stringify(jobs);

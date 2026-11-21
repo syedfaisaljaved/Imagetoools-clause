@@ -14,13 +14,14 @@ const download = async (url) => {
   return { data: btoa(s) };
 };
 
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg.focus) return void chrome.windows.update(sender.tab.windowId, { focused: true }).catch(() => {}); // bring to front
   (msg.download ? download(msg.download) : call(msg.path, msg.body)).then(reply, (e) => reply({ error: e.message }));
   return true; // async reply
 });
 
-// One window per site, side by side on the virtual screen (2560x960): ChatGPT left, Claude right.
-// Separate windows both stay "visible", so neither page gets throttled or paused.
+// One full-screen window per site on the 1280x960 virtual screen, stacked; the app's buttons bring one to front.
+// Separate windows (not tabs) both stay "visible", so neither page gets throttled or paused.
 const W = 1280, H = 960;
 const LAYOUT = [
   { match: 'https://chatgpt.com/', url: 'https://chatgpt.com/?temporary-chat=true' },
@@ -43,7 +44,7 @@ async function arrange(startup) {
       : shared ? (await chrome.windows.create({ tabId: tab.id })).id
       : tab.windowId;
     // Bounds are applied after creation (create() rejects them while the screen is still initialising).
-    await chrome.windows.update(windowId, { left: i * W, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
+    await chrome.windows.update(windowId, { left: 0, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
   }
 }
 // Runs whenever the worker starts and then every minute (the tabs' polling keeps the worker alive).
