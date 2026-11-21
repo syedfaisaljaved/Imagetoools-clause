@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildSteps } from './tools.js';
+import { ASSETS, buildSteps } from './tools.js';
 
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const sniffExt = (b) => (b[0] === 0xff ? 'jpg' : b.toString('latin1', 8, 12) === 'WEBP' ? 'webp' : 'png');
@@ -46,6 +46,10 @@ export function createStore(dir) {
           return writeFile(id, `in-${key}${Array.isArray(value) ? '-' + i : ''}.${EXT[m[1]]}`, Buffer.from(m[2], 'base64'));
         });
         inputs[key] = Array.isArray(value) ? files : files[0];
+      }
+      // Built-in photos the steps use (e.g. the factory) are copied in like uploads.
+      for (const key of new Set(steps.flatMap((s) => s.images))) {
+        if (ASSETS[key]) inputs[key] = writeFile(id, `in-${key}${path.extname(ASSETS[key])}`, fs.readFileSync(ASSETS[key]));
       }
       const job = { id, tool, options, inputs, steps, status: 'queued', outputs: [], createdAt: Date.now(), updatedAt: Date.now() };
       jobs.unshift(job);

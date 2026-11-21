@@ -42,7 +42,9 @@ function selectTool(t) {
   $('#inputs').innerHTML = t.inputs.map((i) => `
     <label class="drop" data-key="${i.key}"><input type="file" accept="image/*" ${i.multiple ? 'multiple' : ''} hidden>
       <span>${esc(i.label)}<br><small>click or drop${i.multiple ? ' (one or more)' : ''}</small></span><b class="count"></b></label>`).join('');
-  $('#fields').innerHTML = t.fields.map((f) => `<label class="field ${f.type}"><span>${esc(f.label)}</span>${control(f)}</label>`).join('');
+  $('#fields').innerHTML = t.fields.map((f) => f.type === 'checkbox'
+    ? `<label class="field checkbox"><input type="checkbox" name="${f.key}"> ${esc(f.label)}</label>`
+    : `<label class="field ${f.type}"><span>${esc(f.label)}</span>${control(f)}</label>`).join('');
   $('#msg').textContent = '';
 }
 
@@ -81,7 +83,7 @@ $('#form').onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target), options = {};
   for (const f of tool.fields) {
-    options[f.key] = f.type === 'multi' ? fd.getAll(f.key) : fd.get(f.key);
+    options[f.key] = f.type === 'multi' ? fd.getAll(f.key) : f.type === 'checkbox' ? fd.has(f.key) : fd.get(f.key);
     if (f.type === 'textarea') store.set(`${tool.id}.${f.key}`, options[f.key]);
   }
   $('#go').disabled = true;

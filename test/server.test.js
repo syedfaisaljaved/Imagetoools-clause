@@ -92,6 +92,16 @@ test('"show window" request is delivered once, only to that site', async () => {
   assert.equal((await (await call(agent, '/agent/next?site=claude&agent=c')).json()).front, false);
 });
 
+test('factory photo is copied into the job and sent to the agent', async () => {
+  const job = await (await call(app, '/api/jobs', { tool: 'wood', images: { product: `data:image/png;base64,${PNG}` } })).json();
+  assert.equal(job.inputs.factory, 'in-factory.jpg');
+  const { job: w } = await (await call(agent, '/agent/next?site=chatgpt&agent=f')).json();
+  assert.equal(w.id, job.id);
+  assert.deepEqual(w.steps[0].images.map((i) => [i.name, i.type]), [['in-product.png', 'image/png'], ['in-factory.jpg', 'image/jpeg']]);
+  assert.ok(w.steps[0].images[1].data.length > 100000);
+  await call(agent, `/agent/jobs/${job.id}/finish`, { error: 'test done' });
+});
+
 test('rejects bad input', async () => {
   const r = await call(app, '/api/jobs', { tool: 'angles', images: { product: 'data:text/plain;base64,AA' } });
   assert.equal(r.status, 400);
