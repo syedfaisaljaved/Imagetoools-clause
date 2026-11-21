@@ -34,6 +34,14 @@ It prints the app URL + password. Open it, click a status pill (top-right) and l
 
 Public URL again: `cd ~/imagetools && sudo docker compose logs tunnel | grep trycloudflare`
 
+Fixed URL (free ngrok static domain): add to `~/imagetools/.env`, then `sudo docker compose up -d`:
+
+```
+NGROK_AUTHTOKEN=<token from dashboard.ngrok.com>
+NGROK_DOMAIN=<your-name>.ngrok-free.app
+COMPOSE_PROFILES=ngrok
+```
+
 ## Develop
 
 ```bash
