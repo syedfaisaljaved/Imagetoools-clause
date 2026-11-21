@@ -80,19 +80,24 @@ function type(text) {
   }
 }
 
-async function submit(text) {
+async function send(text) {
   type(text);
   // Send stays disabled while uploads are in progress.
   const btn = await waitFor(() => { const b = $(SEL.send); return b && !b.disabled && b; }, 120e3);
   if (!btn) throw new Error('Send button never became ready (upload failed?)');
   btn.click();
+}
+
+async function waitReply() {
   await waitFor(() => $(SEL.busy), 15e3); // reply started (may be too quick to catch — fine)
   if (!(await waitFor(() => !$(SEL.busy), STEP_TIMEOUT, 1000))) throw new Error(`Timed out waiting for ${SITE}`);
 }
 
+const submit = async (text) => (await send(text), waitReply());
+
 // ---------- ChatGPT: image steps ----------
 
-// Images produced by ChatGPT, never our uploads (alt "Uploaded image", composer previews, user turns).
+// Candidate result images, never our uploads (alt "Uploaded image", composer previews, user turns).
 const isUpload = (img) =>
   /upload/i.test(img.alt) || img.closest('form') || img.closest(SEL.user) || img.closest('article, [data-testid^="conversation-turn"]')?.querySelector(SEL.user);
 const resultImages = () => {
@@ -101,9 +106,9 @@ const resultImages = () => {
   return generated.length ? generated : imgs.filter((img) => img.naturalWidth >= 400);
 };
 
-// Waits for a new result image whose src stops changing (progressive previews settle into the final image).
+// Waits for an image not in `before` whose src stops changing (progressive previews settle into the final image).
 // Gives up after 90s if no new image appeared at all (image tool may start after the text reply).
-async function newImage(before) {
+async function settledImage(before) {
   const start = Date.now();
   let last, stable = 0;
   return waitFor(() => {
@@ -113,6 +118,15 @@ async function newImage(before) {
     last = cur?.src;
     stable = 0;
   }, 180e3, 1000).then((r) => (r === 'none' ? null : r));
+}
+
+// Base64 of the new result image; an image identical in size to one we uploaded is skipped, never returned.
+async function newImage(before, uploadSizes) {
+  for (let img; (img = await settledImage(before)); before.add(img.src)) {
+    const data = await toBase64(img.src);
+    if (!uploadSizes.has(data.length)) return data;
+  }
+  return null;
 }
 
 async function toBase64(src) {
@@ -129,17 +143,19 @@ async function toBase64(src) {
   }
 }
 
-async function imageStep(step) {
-  const before = new Set(resultImages().map((i) => i.src));
+async function imageStep(step, uploadSizes) {
   if (step.images.length) attach(step.images);
-  await submit(step.prompt);
-  let img = await newImage(before);
-  if (!img && !/limit|try again|can't|cannot|unable/i.test(lastReply())) {
+  await send(step.prompt);
+  await sleep(3000); // our message and its uploads are on screen now: nothing visible yet is a result
+  const before = new Set($$('main img').map((i) => i.src));
+  await waitReply();
+  let image = await newImage(before, uploadSizes);
+  if (!image && !/limit|try again|can't|cannot|unable/i.test(lastReply())) {
     await submit('Yes — generate the image now exactly as described.'); // ChatGPT sometimes asks for confirmation
-    img = await newImage(before);
+    image = await newImage(before, uploadSizes);
   }
-  if (!img) throw new Error(lastReply().slice(0, 400) || 'No image was generated');
-  return { image: await toBase64(img.src) };
+  if (!image) throw new Error(lastReply().slice(0, 400) || 'No image was generated');
+  return { image };
 }
 
 // ---------- Claude: text steps ----------
@@ -211,9 +227,10 @@ async function deleteChat() {
 
 async function runJob(job) {
   let error;
+  const uploadSizes = new Set(job.steps.flatMap((s) => s.images.map((i) => i.data.length)));
   for (const step of job.steps) {
     try {
-      await api(`/agent/jobs/${job.id}/output`, { step: step.index, ...(await (SITE === 'claude' ? textStep : imageStep)(step)) });
+      await api(`/agent/jobs/${job.id}/output`, { step: step.index, ...(await (SITE === 'claude' ? textStep : imageStep)(step, uploadSizes)) });
     } catch (e) {
       await api(`/agent/jobs/${job.id}/output`, { step: step.index, error: e.message });
       if (SITE === 'claude' || /limit|try again later/i.test(e.message)) { error = e.message; break; } // no point continuing

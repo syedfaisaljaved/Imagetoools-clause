@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ImageTools Agent",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Runs ImageTools jobs in the ChatGPT and Claude tabs.",
   "background": { "service_worker": "background.js" },
   "content_scripts": [{ "matches": ["https://chatgpt.com/*", "https://claude.ai/*"], "js": ["content.js"], "run_at": "document_idle" }],

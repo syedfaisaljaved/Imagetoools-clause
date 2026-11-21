@@ -24,6 +24,6 @@
       main.insertAdjacentHTML('beforeend', /REFUSE/.test(text)
         ? `<article data-message-author-role="assistant">I can't create that image.</article>`
         : `<article data-message-author-role="assistant"><img alt="Generated image" src="/backend-api/estuary/content?id=file_gen${++n}"></article>`);
-    }, 800);
+    }, 5000); // real generations take well over 3s
   };
 </script></body></html>

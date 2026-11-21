@@ -11,6 +11,7 @@ let chromium;
 try { ({ chromium } = createRequire(import.meta.url)('playwright')); } catch {}
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PNG = fs.readFileSync(path.join(ROOT, 'public/icon.png'));
+const GEN = fs.readFileSync(path.join(ROOT, 'server/assets/factory.jpg')); // what the mock 'generates'
 const MOCK = fs.readFileSync(path.join(ROOT, 'test/fixtures/mock-chatgpt.html'), 'utf8');
 const MOCK_CLAUDE = fs.readFileSync(path.join(ROOT, 'test/fixtures/mock-claude.html'), 'utf8');
 const deleted = []; // chat-delete API calls seen
@@ -32,6 +33,7 @@ before(async () => {
       return r.fulfill({ json: { cursor: null, items: ids.map((f) => ({ id: `libfile_${f}`, file_id: f, directory_id: 'libdir_root', file_name: `${f}.png` })) } });
     }
     if (url.endsWith('/delete-batch')) return deleted.push(`library ${JSON.parse(r.request().postData()).files.map((f) => f.library_file_id).sort()}`), r.fulfill({ json: {} });
+    if (url.includes('file_gen')) return r.fulfill({ body: GEN, contentType: 'image/jpeg' });
     if (url.includes('/backend-api/')) return r.fulfill({ body: PNG, contentType: 'image/png' });
     r.fulfill({ body: loggedIn ? MOCK : '<h1>Log in</h1>', contentType: 'text/html' });
   });
@@ -65,7 +67,7 @@ test('multi-angle job runs through ChatGPT tab and saves every image', { skip: !
   const done = await waitJob(job.id);
   assert.equal(done.status, 'done', done.error);
   assert.equal(done.outputs.length, 2);
-  for (const o of done.outputs) assert.deepEqual(fs.readFileSync(path.join(srv.store.filesDir, job.id, o.file)), PNG);
+  for (const o of done.outputs) assert.deepEqual(fs.readFileSync(path.join(srv.store.filesDir, job.id, o.file)), GEN); // never the upload
   assert.ok(deleted.includes('chatgpt abc Bearer tok'), 'ChatGPT chat deleted after the job');
   assert.ok(deleted.includes('library libfile_file_gen1,libfile_file_gen2,libfile_file_upload'), `library files deleted: ${deleted}`);
 });
