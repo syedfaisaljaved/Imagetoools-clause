@@ -13,6 +13,8 @@ export function createStore(dir) {
   const dbFile = path.join(dir, 'jobs.json');
   fs.mkdirSync(filesDir, { recursive: true });
   let jobs = fs.existsSync(dbFile) ? JSON.parse(fs.readFileSync(dbFile, 'utf8')) : [];
+  // The browser restarts with the server, so nothing can still be running.
+  for (const j of jobs) if (j.status === 'running') Object.assign(j, { status: 'failed', error: 'Interrupted (server restarted)' });
   const save = () => {
     fs.writeFileSync(dbFile + '.tmp', JSON.stringify(jobs));
     fs.renameSync(dbFile + '.tmp', dbFile); // atomic replace

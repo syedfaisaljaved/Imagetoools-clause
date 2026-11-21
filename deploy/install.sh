@@ -19,6 +19,11 @@ cd "$DIR"
 [ -f .env ] || echo "APP_PASSWORD=$(openssl rand -hex 6)" > .env
 sudo docker compose up -d --build
 
+# Auto-update: every 5 min pull the branch and rebuild only when it changed.
+sudo tee /etc/cron.d/imagetools >/dev/null <<CRON
+*/5 * * * * root cd $DIR && OLD=\$(sudo -u $USER git rev-parse HEAD) && sudo -u $USER git pull -q --ff-only && [ "\$(sudo -u $USER git rev-parse HEAD)" != "\$OLD" ] && docker compose up -d --build >> /var/log/imagetools-update.log 2>&1
+CRON
+
 echo "Waiting for public URL..."
 for _ in $(seq 60); do
   URL=$(sudo docker compose logs tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1 || true)

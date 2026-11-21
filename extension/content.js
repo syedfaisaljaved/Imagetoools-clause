@@ -51,7 +51,11 @@ const diagnose = () => {
   return `Prompt box not found on ${location.pathname} ("${document.title}"). Inputs seen: ${els.join(', ') || 'none'}`;
 };
 
-const lastReply = () => $$(SEL.reply).at(-1)?.innerText.trim() || '';
+// Text of the latest reply (its markdown body when there is one, skipping screen-reader summaries).
+const lastReply = () => {
+  const r = $$(SEL.reply).at(-1);
+  return (r?.querySelector('.standard-markdown, .font-claude-response, .markdown') || r)?.innerText.trim() || '';
+};
 
 function attach(images) {
   const dt = new DataTransfer();
@@ -87,22 +91,27 @@ async function submit(text) {
 
 // ---------- ChatGPT: image steps ----------
 
-// Images produced by ChatGPT (not the ones we uploaded, not avatars/icons).
-const resultImages = () =>
-  $$('main img').filter((img) => !img.closest(SEL.user) && (/generated image/i.test(img.alt) || img.naturalWidth >= 400));
+// Images produced by ChatGPT, never our uploads (alt "Uploaded image", composer previews, user turns).
+const isUpload = (img) =>
+  /upload/i.test(img.alt) || img.closest('form') || img.closest(SEL.user) || img.closest('article, [data-testid^="conversation-turn"]')?.querySelector(SEL.user);
+const resultImages = () => {
+  const imgs = $$('main img').filter((img) => !isUpload(img));
+  const generated = imgs.filter((img) => /generated image/i.test(img.alt));
+  return generated.length ? generated : imgs.filter((img) => img.naturalWidth >= 400);
+};
 
 // Waits for a new result image whose src stops changing (progressive previews settle into the final image).
-// Gives up after 45s if no new image appeared at all (image tool may start after the text reply).
+// Gives up after 90s if no new image appeared at all (image tool may start after the text reply).
 async function newImage(before) {
   const start = Date.now();
   let last, stable = 0;
   return waitFor(() => {
     const cur = resultImages().filter((i) => !before.has(i.src)).at(-1);
-    if (!cur && Date.now() - start > 45e3) return 'none';
+    if (!cur && Date.now() - start > 90e3) return 'none';
     if (cur?.complete && cur.naturalWidth && cur.src === last) return ++stable >= 3 && cur;
     last = cur?.src;
     stable = 0;
-  }, 120e3, 1000).then((r) => (r === 'none' ? null : r));
+  }, 180e3, 1000).then((r) => (r === 'none' ? null : r));
 }
 
 async function toBase64(src) {
@@ -147,7 +156,7 @@ async function textStep(step) {
     return stable >= 3 && t;
   }, 60e3, 1000);
   if (!text) throw new Error('Claude gave no reply');
-  return { text: text.replace(/^```\w*\n?|```$/g, '').trim() };
+  return { text: text.replace(/^Claude responded:[^\n]*\n+/, '').replace(/^```\w*\n?|```$/g, '').trim() };
 }
 
 // ---------- Cleanup: delete the chat so history / image library don't fill up ----------

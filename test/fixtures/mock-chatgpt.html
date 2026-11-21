@@ -15,7 +15,7 @@
     const text = ed.innerText;
     ed.innerText = ''; send.disabled = true;
     history.pushState({}, '', '/c/abc');
-    main.insertAdjacentHTML('beforeend', `<article data-message-author-role="user">${text}</article>`);
+    main.insertAdjacentHTML('beforeend', `<article><div data-message-author-role="user">${text}</div><img alt="Uploaded image" src="/backend-api/estuary/content?id=upload"></article>`);
     const stop = Object.assign(document.createElement('button'), { textContent: 'Stop' });
     stop.dataset.testid = 'stop-button';
     document.body.append(stop);

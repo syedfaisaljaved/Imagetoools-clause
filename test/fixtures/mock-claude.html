@@ -15,7 +15,7 @@
     main.insertAdjacentHTML('beforeend', `<div data-testid="user-message">${text}</div><div data-is-streaming="true">Drawing prompt:</div>`);
     setTimeout(() => {
       const r = main.lastElementChild;
-      r.textContent = `Technical line drawing of the sofa from ${window.uploaded} photos`;
+      r.innerHTML = `<span>Claude responded: Technical line…</span><div class="standard-markdown">Technical line drawing of the sofa from ${window.uploaded} photos</div>`;
       r.dataset.isStreaming = 'false';
     }, 600);
   };
