@@ -28,16 +28,29 @@ test('login, then validation error when an image is missing', { skip: !chromium 
   await page.getByText('Wrong password').waitFor();
   await page.fill('input[type=password]', 'secret');
   await page.click('button');
-  await page.getByText('ChatGPT offline').waitFor();
+  await page.locator('#agents [data-site=chatgpt][data-state=offline]').waitFor();
   await page.click('#tabs >> text=Apply fabric');
-  await page.setInputFiles('.drop[data-key=furniture] input', ICON);
+  await page.setInputFiles('.upload[data-key=furniture] input', ICON);
+  await page.locator('.upload[data-key=furniture] .thumb').waitFor(); // preview shown
   await page.click('#go');
   await page.getByText('Missing image: Fabric photo').waitFor();
 });
 
+test('photos can be removed; prompt stays collapsed under Advanced', { skip: !chromium }, async () => {
+  await page.click('#tabs >> text=Furniture drawing');
+  await page.setInputFiles('.upload[data-key=photos] input', [ICON, ICON]);
+  await page.locator('.upload[data-key=photos] .thumb >> nth=1').waitFor();
+  await page.click('.upload[data-key=photos] [data-remove="0"]');
+  assert.equal(await page.locator('.upload[data-key=photos] .thumb').count(), 1);
+  assert.equal(await page.locator('textarea[name=instructions]').isVisible(), false);
+  await page.click('#advanced summary');
+  assert.equal(await page.locator('textarea[name=instructions]').isVisible(), true);
+});
+
 test('submit restyle job → agent finishes it → result thumbnail shown', { skip: !chromium }, async () => {
   await page.click('#tabs >> text=Restyle');
-  await page.setInputFiles('.drop[data-key=furniture] input', ICON);
+  await page.setInputFiles('.upload[data-key=furniture] input', ICON);
+  await page.locator('.upload[data-key=furniture] .thumb').waitFor();
   await page.selectOption('select[name=fabric]', 'Boucle');
   await page.fill('input[name=color]', 'cream');
   await page.click('#go');
@@ -51,5 +64,7 @@ test('submit restyle job → agent finishes it → result thumbnail shown', { sk
 
   await page.locator('.badge.done').waitFor({ timeout: 8000 });
   assert.equal(await page.locator('img[alt="result 1"]').count(), 1);
-  assert.equal(await page.locator('#agents .pill').first().textContent(), 'ChatGPT working…'); // agent last reported busy
+  assert.equal(await page.locator('#agents [data-site=chatgpt]').getAttribute('data-state'), 'busy'); // agent last reported busy
+  await page.click('img[alt="result 1"]');
+  assert.equal(await page.locator('#viewer').isVisible(), true); // tap a result → full-screen viewer
 });

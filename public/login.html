@@ -7,17 +7,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <form class="card login" id="f">
+  <form class="panel login" id="f">
     <h1>ImageTools</h1>
-    <input type="password" name="password" placeholder="Password" autofocus required>
-    <button>Log in</button>
-    <p class="err" id="e"></p>
+    <p class="muted small" style="margin:0">Enter the password to continue.</p>
+    <input class="input" type="password" name="password" placeholder="Password" autofocus required>
+    <button class="btn btn-primary btn-lg">Log in</button>
+    <p class="alert" id="e" hidden>Wrong password</p>
   </form>
   <script>
     f.onsubmit = async (ev) => {
       ev.preventDefault();
       const r = await fetch('/login', { method: 'POST', body: JSON.stringify({ password: f.password.value }) });
-      r.ok ? location.reload() : (e.textContent = 'Wrong password');
+      r.ok ? location.reload() : (e.hidden = false);
     };
   </script>
 </body>

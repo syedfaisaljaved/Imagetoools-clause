@@ -2,33 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
   <title>ImageTools</title>
   <link rel="icon" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>ImageTools</h1>
-    <small id="note" class="muted"></small>
-    <div id="agents"></div>
+  <header class="topbar">
+    <span class="brand">ImageTools</span>
+    <div id="agents" class="agents"></div>
   </header>
-  <main>
-    <section class="card">
-      <nav id="tabs"></nav>
-      <form id="form">
-        <p id="desc" class="muted"></p>
-        <div id="inputs" class="drops"></div>
-        <div id="fields"></div>
-        <button id="go" type="submit">Generate</button>
-        <p id="msg" class="err"></p>
-      </form>
+  <p id="note" class="note" hidden></p>
+
+  <div class="layout">
+    <form id="form" class="panel" novalidate>
+      <nav id="tabs" class="tabs" aria-label="Tools"></nav>
+      <p id="desc" class="muted small"></p>
+      <div id="inputs" class="uploads"></div>
+      <div id="fields" class="fields"></div>
+      <details id="advanced" class="advanced" hidden>
+        <summary>Advanced <span class="muted small">prompt &amp; notes</span></summary>
+        <div id="advfields" class="fields"></div>
+      </details>
+      <p id="msg" class="alert" hidden></p>
+      <div class="actionbar">
+        <button id="go" class="btn btn-primary btn-lg" type="submit">Generate</button>
+      </div>
+    </form>
+
+    <section class="results" aria-labelledby="results-title">
+      <h2 id="results-title">Results</h2>
+      <div id="jobs" class="jobs"><p class="empty muted">Your generated images will appear here.</p></div>
     </section>
-    <section>
-      <h2>Jobs</h2>
-      <div id="jobs"><p class="muted">No jobs yet.</p></div>
-    </section>
-  </main>
+  </div>
+
+  <dialog id="viewer" class="viewer">
+    <img id="viewer-img" alt="Result">
+    <div class="viewer-bar">
+      <a id="viewer-dl" class="btn btn-primary" download>Download</a>
+      <button class="btn btn-secondary" type="button" data-close>Close</button>
+    </div>
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>
