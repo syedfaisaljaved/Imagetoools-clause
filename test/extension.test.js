@@ -28,9 +28,14 @@ before(async () => {
     const url = r.request().url();
     if (url.includes('/api/auth/session')) return r.fulfill({ json: { accessToken: 'tok' } });
     if (r.request().method() === 'PATCH') return deleted.push(`chatgpt ${url.split('/').pop()} ${r.request().headers().authorization}`), r.fulfill({ json: {} });
+    const gens = Array.from({ length: 9 }, (_, i) => `file_gen${i + 1}`);
+    if (url.includes('/my/recent/image_gen')) return r.fulfill({ json: { items: gens.map((f) => ({ conversation_id: 'abc', url: `https://chatgpt.com/backend-api/estuary/content?id=${f}&sig=x` })) } });
     if (url.endsWith('/backend-api/files/library')) {
-      const ids = ['file_upload', ...Array.from({ length: 9 }, (_, i) => `file_gen${i + 1}`)];
-      return r.fulfill({ json: { cursor: null, items: ids.map((f) => ({ id: `libfile_${f}`, file_id: f, directory_id: 'libdir_root', file_name: `${f}.png` })) } });
+      const now = new Date().toISOString(), old = '2020-01-01T00:00:00Z';
+      const items = [...gens.map((f) => ({ file_id: f, file_name: `${f}.png`, record_creation_time: now })),
+        { file_id: 'file_up', file_name: 'in-product.png', record_creation_time: now }, // this job's upload
+        { file_id: 'file_old', file_name: 'in-product.png', record_creation_time: old }]; // the user's older file: keep
+      return r.fulfill({ json: { cursor: null, items: items.map((i) => ({ ...i, id: `libfile_${i.file_id}`, directory_id: 'libdir_root' })) } });
     }
     if (url.endsWith('/delete-batch')) return deleted.push(`library ${JSON.parse(r.request().postData()).files.map((f) => f.library_file_id).sort()}`), r.fulfill({ json: {} });
     if (url.includes('file_gen')) return r.fulfill({ body: GEN, contentType: 'image/jpeg' });
@@ -69,7 +74,9 @@ test('multi-angle job runs through ChatGPT tab and saves every image', { skip: !
   assert.equal(done.outputs.length, 2);
   for (const o of done.outputs) assert.deepEqual(fs.readFileSync(path.join(srv.store.filesDir, job.id, o.file)), GEN); // never the upload
   assert.ok(deleted.includes('chatgpt abc Bearer tok'), 'ChatGPT chat deleted after the job');
-  assert.ok(deleted.includes('library libfile_file_gen1,libfile_file_gen2,libfile_file_upload'), `library files deleted: ${deleted}`);
+  const lib = deleted.find((d) => d.startsWith('library'));
+  assert.ok(lib?.includes('libfile_file_gen1') && lib.includes('libfile_file_up') && !lib.includes('file_old'), `library files deleted: ${deleted}`);
+  assert.match((await (await fetch('http://127.0.0.1:18180/api/logs')).json()).join('\n'), new RegExp(`${job.id} library: deleted`));
 });
 
 test('drawing job: Claude writes the prompt from all photos, ChatGPT draws it, both chats deleted', { skip: !chromium }, async () => {

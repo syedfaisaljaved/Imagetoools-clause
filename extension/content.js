@@ -177,44 +177,51 @@ async function textStep(step) {
   return { text: text.replace(/^Claude responded:[^\n]*\n+/, '').replace(/^```\w*\n?|```$/g, '').trim() };
 }
 
-// ---------- Cleanup: delete the chat and its images so history / image library don't fill up ----------
+// ---------- Cleanup: delete the chat and its files so history / image library don't fill up ----------
 
-// ChatGPT files shown in this chat (our uploads + generated images), by their file id.
-const chatFileIds = () =>
-  new Set($$('main img').map((img) => { try { return new URL(img.src).searchParams.get('id'); } catch { return null; } }).filter((id) => id?.startsWith('file')));
+const libraryPage = (headers, cursor) =>
+  fetch('/backend-api/files/library', {
+    method: 'POST', headers,
+    body: JSON.stringify({ cursor, limit: 50, categories: [], include_hidden_files: true, include_saved_entities: true, include_sites: false, providers: [], ranking: 'suggested', source: null, trashed_only: false }),
+  }).then((r) => r.json());
 
-// Moves those files from ChatGPT's library to its trash (auto-emptied after 30 days).
-// The library indexes new files with a short delay, so look a few times.
-async function deleteLibraryFiles(ids, headers) {
-  for (let attempt = 0; attempt < 4 && ids.size; attempt++) {
+// Moves the job's files from ChatGPT's library to its trash (emptied after 30 days): images generated in
+// this chat (the image-gen list records each image's chat) and our uploads (our file names, created after
+// the job started). The library indexes new files with a short delay, so it looks a few times.
+async function deleteLibraryFiles({ chatId, since, uploadNames, headers }) {
+  let deleted = 0, generated = 0;
+  for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt) await sleep(5000);
+    const gen = chatId ? (await (await fetch('/backend-api/my/recent/image_gen?limit=50', { headers })).json()).items || [] : [];
+    const genIds = new Set(gen.filter((i) => i.conversation_id === chatId).map((i) => new URL(i.url, location.origin).searchParams.get('id')));
+    generated = Math.max(generated, genIds.size);
     const found = [];
-    let cursor = null;
-    for (let page = 0; page < 10 && found.length < ids.size; page++) {
-      const r = await (await fetch('/backend-api/files/library', {
-        method: 'POST', headers,
-        body: JSON.stringify({ cursor, limit: 50, categories: [], include_hidden_files: true, include_saved_entities: true, include_sites: false, providers: [], ranking: 'suggested', source: null, trashed_only: false }),
-      })).json();
-      found.push(...(r.items || []).filter((i) => ids.has(i.file_id)));
+    for (let page = 0, cursor = null; page < 4; page++) {
+      const r = await libraryPage(headers, cursor);
+      found.push(...(r.items || []).filter((i) => genIds.has(i.file_id) || (uploadNames.has(i.file_name) && i.record_creation_time >= since)));
       if (!(cursor = r.cursor)) break;
     }
-    if (!found.length) continue;
-    await fetch('/backend-api/files/library/files/delete-batch', {
-      method: 'POST', headers,
-      body: JSON.stringify({ files: found.map((i) => ({ library_file_id: i.id, file_id: i.file_id, parent_directory_id: i.directory_id, file_name: i.file_name })) }),
-    });
-    for (const i of found) ids.delete(i.file_id);
+    if (found.length) {
+      await fetch('/backend-api/files/library/files/delete-batch', {
+        method: 'POST', headers,
+        body: JSON.stringify({ files: found.map((i) => ({ library_file_id: i.id, file_id: i.file_id, parent_directory_id: i.directory_id, file_name: i.file_name })) }),
+      });
+      deleted += found.length;
+    }
+    if (generated && deleted >= generated + uploadNames.size) break;
   }
+  return `library: deleted ${deleted} file(s) (${generated} generated, ${uploadNames.size} uploaded)`;
 }
 
-async function deleteChat() {
+async function deleteChat(job) {
   try {
     if (SITE === 'chatgpt') {
       const { accessToken } = await (await fetch('/api/auth/session')).json();
       const headers = { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` };
-      const id = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
-      if (id) await fetch(`/backend-api/conversation/${id}`, { method: 'PATCH', headers, body: JSON.stringify({ is_visible: false }) });
-      await deleteLibraryFiles(chatFileIds(), headers);
+      const chatId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
+      if (chatId) await fetch(`/backend-api/conversation/${chatId}`, { method: 'PATCH', headers, body: JSON.stringify({ is_visible: false }) });
+      const uploadNames = new Set(job.steps.flatMap((s) => s.images.map((i) => i.name)));
+      await api('/agent/log', { msg: `${job.id} ${await deleteLibraryFiles({ chatId, since: job.since, uploadNames, headers })}` });
     } else {
       const id = location.pathname.match(/\/chat\/([\w-]+)/)?.[1];
       if (!id) return;
@@ -222,12 +229,13 @@ async function deleteChat() {
       await fetch(`/api/organizations/${org.uuid}/chat_conversations/${id}`, { method: 'DELETE' });
     }
   } catch (e) {
-    console.warn('[ImageTools] delete chat failed', e);
+    api('/agent/log', { msg: `${job.id} cleanup failed: ${e.message}` }).catch(() => {});
   }
 }
 
 async function runJob(job) {
   let error;
+  job.since = new Date(Date.now() - 60e3).toISOString(); // files we create from here on belong to this job
   const uploadSizes = new Set(job.steps.flatMap((s) => s.images.map((i) => i.data.length)));
   for (const step of job.steps) {
     try {
@@ -237,7 +245,7 @@ async function runJob(job) {
       if (SITE === 'claude' || /limit|try again later/i.test(e.message)) { error = e.message; break; } // no point continuing
     }
   }
-  await deleteChat();
+  await deleteChat(job);
   await api(`/agent/jobs/${job.id}/finish`, { error });
 }
 

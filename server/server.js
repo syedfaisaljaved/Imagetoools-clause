@@ -63,6 +63,8 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     Object.fromEntries(SITES.map((s) => [s, { ...agents[s], state: Date.now() - agents[s].lastSeen < 20e3 ? agents[s].state : 'offline' }]));
   // Site whose window the user wants in front of the remote screen; handed to that site's tab on its next poll.
   let front = null;
+  // Recent agent log lines (cleanup results, failures) for remote debugging: GET /api/logs.
+  const logs = [];
   const takeFront = (site) => front === site && !(front = null);
 
   // Routes: [method, regex, handler(req, res, url, ...params)]
@@ -72,6 +74,7 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
       const { tool, images, options } = await readJson(req);
       send(res, 201, publicJob(store.create(tool, images, options)));
     }],
+    ['GET', /^\/api\/logs$/, (req, res) => send(res, 200, logs)],
     ['POST', /^\/api\/front$/, async (req, res) => {
       const { site } = await readJson(req, 1e3);
       front = SITES.includes(site) ? site : null;
@@ -95,6 +98,12 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
       // An extra logged-out tab must not hide a working one.
       if (a.state === 'offline' || a.state === state || Date.now() - a.lastSeen > 10e3) Object.assign(a, { state, note: String(note).slice(0, 300), lastSeen: Date.now() });
       send(res, 200, { ok: true, front: takeFront(site) });
+    }],
+    ['POST', /^\/agent\/log$/, async (req, res, url) => {
+      const { msg } = await readJson(req, 1e4);
+      logs.push(`${new Date().toISOString()} ${siteParam(url)}: ${String(msg).slice(0, 500)}`);
+      logs.splice(0, logs.length - 100);
+      send(res, 200, { ok: true });
     }],
     ['POST', /^\/agent\/jobs\/(\w+)\/output$/, async (req, res, url, id) => {
       const { step, image, text, error } = await readJson(req);
