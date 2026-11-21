@@ -46,7 +46,8 @@ async function arrange(startup) {
     // Bounds are applied after creation (create() rejects them while the screen is still initialising),
     // and only when they differ: any update raises the window above the one the user is looking at.
     const win = await chrome.windows.get(windowId);
-    if (win.left || win.top || win.width !== W || win.height !== H || win.state !== 'normal') {
+    const off = (a, b) => Math.abs(a - b) > 20; // Chromium reports e.g. 1279 for 1280
+    if (off(win.left, 0) || off(win.top, 0) || off(win.width, W) || off(win.height, H) || win.state !== 'normal') {
       await chrome.windows.update(windowId, { left: 0, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
     }
   }
