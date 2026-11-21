@@ -4,6 +4,7 @@ const SITE = location.hostname.endsWith('claude.ai') ? 'claude' : 'chatgpt';
 const SEL = {
   chatgpt: {
     home: '/',
+    chat: /^\/c\//,
     editor: '#prompt-textarea, .ProseMirror[contenteditable="true"], textarea[name="prompt-textarea"], form [contenteditable="true"], form textarea',
     send: '[data-testid="send-button"], #composer-submit-button, button[aria-label*="send" i]',
     busy: '[data-testid="stop-button"], button[aria-label*="stop" i]',
@@ -12,6 +13,7 @@ const SEL = {
   },
   claude: {
     home: '/new',
+    chat: /^\/chat\//,
     editor: '.ProseMirror[contenteditable="true"], [contenteditable="true"], textarea',
     send: 'button[aria-label*="send" i]',
     busy: 'button[aria-label*="stop" i], [data-is-streaming="true"]',
@@ -194,9 +196,12 @@ async function runJob(job) {
         // only the active tab of each window works; extra tabs stay idle
       } else if (!$(SEL.editor)) {
         await api('/agent/status', { state: 'login', note: diagnose() });
-      } else if (location.pathname !== SEL.home) {
+      } else if (SEL.chat.test(location.pathname)) {
         location.href = SEL.home; // every job starts in a fresh chat
         return;
+      } else if (location.pathname !== SEL.home) {
+        // Login, onboarding, settings…: never navigate away from those, just wait.
+        await api('/agent/status', { state: 'login', note: `Waiting on ${location.pathname} — finish there or open ${location.origin}${SEL.home}` });
       } else {
         const { job } = await api('/agent/next');
         if (job) {

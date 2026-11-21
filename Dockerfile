@@ -7,7 +7,7 @@ COPY package.json docker/start.sh ./
 COPY server server
 COPY public public
 COPY extension extension
-ENV DATA_DIR=/data DISPLAY=:99
+ENV DATA_DIR=/data
 USER node
 EXPOSE 8080
 CMD ["./start.sh"]
