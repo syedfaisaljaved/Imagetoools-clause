@@ -70,4 +70,7 @@ test('submit restyle job → agent finishes it → result thumbnail shown', { sk
   await page.click('#viewer [data-close]');
   await page.click('.job .ins button >> nth=0'); // uploaded photo opens in the same viewer
   assert.match(await page.locator('#viewer-img').getAttribute('src'), /in-furniture\.png$/);
+  await page.click('#viewer [data-use=wood]'); // send it to another tool
+  await page.locator('.upload[data-key=product] .thumb').waitFor();
+  assert.equal(await page.locator('.tab[aria-selected=true]').textContent(), 'Raw wood');
 });

@@ -35,7 +35,7 @@ const ANGLES = {
 };
 
 const FABRICS = ['Keep original', 'Velvet', 'Linen', 'Boucle', 'Chenille', 'Leather', 'Faux leather', 'Cotton twill', 'Jacquard', 'Corduroy'];
-const FINISHES = ['Keep original', 'Walnut', 'Natural oak', 'Teak', 'Dark espresso', 'Matte black', 'White lacquer', 'Brushed gold metal', 'Chrome'];
+const FINISHES = ['Keep original', 'Walnut', 'Natural oak', 'Teak', 'Dark espresso', 'Matte black', 'White lacquer', 'Gold', 'Champagne gold', 'Silver', 'Brushed gold metal', 'Chrome'];
 const WOODS = ['Match the product', 'Pine', 'Beech', 'Sheesham', 'Mango wood', 'Teak', 'Rubberwood'];
 
 // Casual phone shots in the factory courtyard (style taken from the owner's real photos).

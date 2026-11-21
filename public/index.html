@@ -40,9 +40,15 @@
 
   <dialog id="viewer" class="viewer">
     <img id="viewer-img" alt="Result">
-    <div class="viewer-bar">
-      <a id="viewer-dl" class="btn btn-primary" download>Download</a>
-      <button class="btn btn-secondary" type="button" data-close>Close</button>
+    <div class="viewer-panel">
+      <div class="viewer-use">
+        <span class="small">Use this image in</span>
+        <div id="viewer-tools" class="viewer-tools"></div>
+      </div>
+      <div class="viewer-bar">
+        <a id="viewer-dl" class="btn btn-primary" download>Download</a>
+        <button class="btn btn-secondary" type="button" data-close>Close</button>
+      </div>
     </div>
   </dialog>
   <script src="app.js"></script>

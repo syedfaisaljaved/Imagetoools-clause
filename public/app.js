@@ -212,9 +212,23 @@ $('#jobs').onclick = async (e) => {
 function openViewer(src) {
   $('#viewer-img').src = src;
   $('#viewer-dl').href = src;
+  $('#viewer-tools').innerHTML = tools.map((t) => `<button type="button" data-use="${t.id}">${esc(t.name)}</button>`).join('');
   $('#viewer').showModal();
 }
-$('#viewer').onclick = (e) => { if (e.target.matches('[data-close], #viewer, #viewer-img')) $('#viewer').close(); };
+$('#viewer').onclick = (e) => {
+  const use = e.target.closest('[data-use]')?.dataset.use;
+  if (use) return useImage($('#viewer-img').getAttribute('src'), use);
+  if (e.target.matches('[data-close], #viewer, #viewer-img')) $('#viewer').close();
+};
+
+// Loads a result (or uploaded) image into another tool's first photo slot, ready to Generate.
+async function useImage(src, toolId) {
+  $('#viewer').close();
+  selectTool(tools.find((t) => t.id === toolId));
+  const blob = await (await fetch(src)).blob();
+  await addImages(tool.inputs[0].key, [new File([blob], src.split('/').pop(), { type: blob.type })]);
+  $('#form').scrollIntoView({ behavior: 'smooth' });
+}
 
 async function refresh() {
   const { jobs, agents } = await api('/api/state');

@@ -17,7 +17,7 @@ test('fabric + restyle prompts and validation', () => {
   const [r] = buildSteps('restyle', { furniture: 'a' }, { fabric: 'Linen', color: 'beige', finish: 'Walnut' });
   assert.match(r.prompt, /linen.*beige.*walnut/s);
   assert.throws(() => buildSteps('fabric', { furniture: 'a' }), /Fabric photo/);
-  assert.throws(() => buildSteps('restyle', { furniture: 'a' }, { finish: 'Gold' }), /Invalid/);
+  assert.throws(() => buildSteps('restyle', { furniture: 'a' }, { finish: 'Rose gold' }), /Invalid/);
   assert.throws(() => buildSteps('angles', { product: 'a' }, { angles: [] }), /at least one/);
 });
 
@@ -63,4 +63,10 @@ test('furniture drawing (outline): carving line art, no factory option; old "dra
   assert.match(gpt.prompt, /ready to trace onto wood for carving/);
   assert.deepEqual(gpt.images, ['photos']); // factory checkbox doesn't exist here
   assert.match(buildSteps('drawing', { photos: ['a'] }, {})[0].prompt, /technical drawing/);
+});
+
+test('restyle offers gold, champagne gold and silver polish', () => {
+  const [s] = buildSteps('restyle', { furniture: 'a' }, { finish: 'Champagne gold' });
+  assert.match(s.prompt, /wood\/metal polish → champagne gold/);
+  for (const f of ['Gold', 'Silver']) assert.doesNotThrow(() => buildSteps('restyle', { furniture: 'a' }, { finish: f }));
 });
