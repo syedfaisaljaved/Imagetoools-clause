@@ -18,7 +18,9 @@ const BACKGROUNDS = {
   'Same as original': 'with the same background as the original photo',
   'Modern living room': 'placed in a bright, modern, minimal living room interior',
 };
-const FACTORY = 'placed in our factory shown in the factory photo (the last attached image): same walls, concrete floor, perspective and daylight, standing on the floor with realistic contact shadows';
+// Where products stand in the factory: right in front of the back wall, seen from a distance.
+const WALL = 'standing close to the white plastered back wall (about half a metre in front of it, not out in the middle of the courtyard), seen from a few metres back in a wide, zoomed-out shot: the full height of the back wall, the red brick side wall and plenty of concrete floor in front stay visible, and the product fills only about half of the frame height';
+const FACTORY = `placed in our factory shown in the factory photo (the last attached image): same walls, concrete floor, perspective and daylight, ${WALL}, with realistic contact shadows`;
 const FACTORY_FIELD = { key: 'factory', label: 'Factory background', type: 'checkbox' };
 const bg = (background, factory) => (factory ? FACTORY : BACKGROUNDS[background]);
 const plusFactory = (images, factory) => (factory ? [...images, 'factory'] : images);
@@ -51,7 +53,7 @@ const LIGHT = {
   'Bright sun': 'bright direct sunlight casting hard, realistic shadows across the dusty floor',
   'Overcast': 'soft overcast daylight with gentle, diffused shadows',
 };
-const PHONE = 'It must look like a casual, unedited smartphone photo: vertical portrait frame, handheld, natural phone-camera HDR and sharpness, product fully in frame and centered, filling about two thirds of the height. No studio lighting, no props, no people, no text or watermark.';
+const PHONE = 'It must look like a casual, unedited smartphone photo: vertical portrait frame, handheld, natural phone-camera HDR and sharpness, product fully in frame and centered. No studio lighting, no props, no people, no text or watermark.';
 
 const extra = (notes) => (notes?.trim() ? ` Additional instructions: ${notes.trim()}` : '');
 
@@ -196,7 +198,7 @@ export const tools = [
     build: ({ shots, light, notes }) =>
       shots.map((shot, i) => ({
         images: i === 0 ? ['product', 'factory'] : [],
-        prompt: `${i === 0 ? 'Image 1 is our product. Image 2 is our factory courtyard.' : 'Same product, same factory courtyard, a new photo.'} Create a realistic photo of this exact product standing on the dusty, patchy concrete floor of the factory from image 2, with its white plastered wall behind and the red brick wall at the side. Shot ${SHOTS[shot]}. ${LIGHT[light]}. ${KEEP} ${PHONE}${extra(notes)} ${NOW}`,
+        prompt: `${i === 0 ? 'Image 1 is our product. Image 2 is our factory courtyard.' : 'Same product, same factory courtyard, a new photo.'} Create a realistic photo of this exact product on the dusty, patchy concrete floor of the factory from image 2, ${WALL}. Shot ${SHOTS[shot]}. ${LIGHT[light]}. ${KEEP} ${PHONE}${extra(notes)} ${NOW}`,
       })),
   },
 ];
