@@ -84,7 +84,7 @@ test('drawing job: Claude writes the prompt from all photos, ChatGPT draws it, b
 test('two-image fabric job completes; ChatGPT refusal is reported as failure', { skip: !chromium }, async () => {
   const ok = srv.store.create('fabric', { furniture: img, fabric: img }, {});
   assert.equal((await waitJob(ok.id)).status, 'done');
-  await page.waitForURL('https://chatgpt.com/?temporary-chat=true'); // agent returned to a fresh temporary chat
+  await page.waitForURL('https://chatgpt.com/'); // agent returned to a fresh chat
   const bad = srv.store.create('restyle', { furniture: img }, { notes: 'REFUSE' });
   const failed = await waitJob(bad.id);
   assert.equal(failed.status, 'failed');
@@ -94,7 +94,7 @@ test('two-image fabric job completes; ChatGPT refusal is reported as failure', {
 test('logged-out page reports "login" state', { skip: !chromium }, async () => {
   loggedIn = false;
   await page.goto('https://chatgpt.com/');
-  await page.waitForTimeout(12000); // a fresh "ready" from the same site is trusted for 10s
+  await page.waitForTimeout(16000); // a fresh "ready" from the same site is trusted for 10s
   const state = await (await fetch('http://127.0.0.1:18180/api/state')).json();
   assert.equal(state.agents.chatgpt.state, 'login');
   assert.match(state.agents.chatgpt.note, /Prompt box not found on \/ .*Inputs seen: none/);

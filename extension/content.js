@@ -1,11 +1,12 @@
 // Runs inside the chatgpt.com / claude.ai tab: polls the server for work on this site and does it like a user would.
 // If a site changes its page, usually only its selectors below need updating.
-// `home` is where every job starts: ChatGPT's temporary chat keeps jobs out of history and the image library.
+// `home` is where every job starts. (ChatGPT's temporary chats can't generate images, so jobs use normal chats
+// and clean up after themselves — see deleteChat.)
 const SITE = location.hostname.endsWith('claude.ai') ? 'claude' : 'chatgpt';
 const SEL = {
   chatgpt: {
-    home: '/?temporary-chat=true',
-    leave: /^\/(c\/|$)/, // finished chat, or a normal (non-temporary) new chat
+    home: '/',
+    leave: /^\/(c\/|$)/, // finished chat, or '/' with extra query params
     editor: '#prompt-textarea, .ProseMirror[contenteditable="true"], textarea[name="prompt-textarea"], form [contenteditable="true"], form textarea',
     send: '[data-testid="send-button"], #composer-submit-button, button[aria-label*="send" i]',
     busy: '[data-testid="stop-button"], button[aria-label*="stop" i]',
@@ -55,7 +56,7 @@ const diagnose = () => {
 // Text of the latest reply (its markdown body when there is one, skipping screen-reader summaries).
 const lastReply = () => {
   const r = $$(SEL.reply).at(-1);
-  return (r?.querySelector('.standard-markdown, .font-claude-response, .markdown') || r)?.innerText.trim() || '';
+  return ((SITE === 'claude' && r?.querySelector('.standard-markdown, .font-claude-response')) || r)?.innerText.trim() || '';
 };
 
 function attach(images) {
@@ -150,7 +151,7 @@ async function imageStep(step, uploadSizes) {
   const before = new Set($$('main img').map((i) => i.src));
   await waitReply();
   let image = await newImage(before, uploadSizes);
-  if (!image && !/limit|try again|can't|cannot|unable/i.test(lastReply())) {
+  if (!image && !/limit|try again|can't|cannot|unable|not available/i.test(lastReply())) {
     await submit('Yes — generate the image now exactly as described.'); // ChatGPT sometimes asks for confirmation
     image = await newImage(before, uploadSizes);
   }

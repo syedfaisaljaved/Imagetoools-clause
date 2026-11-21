@@ -18,7 +18,7 @@ rm -rf "$DATA_DIR/profile/Default/Service Worker"
       --load-extension="$PWD/extension" --disable-features=DisableLoadExtensionCommandLineSwitch \
       --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows \
       --no-first-run --no-default-browser-check --hide-crash-restore-bubble --window-position=0,0 --window-size=1280,960 \
-      $CHROME_FLAGS "https://chatgpt.com/?temporary-chat=true" >/dev/null 2>&1 || true
+      $CHROME_FLAGS https://chatgpt.com/ >/dev/null 2>&1 || true
     sleep 3 # restart if it crashes or gets closed
   done
 ) &
