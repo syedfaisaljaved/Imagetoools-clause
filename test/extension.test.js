@@ -27,6 +27,11 @@ before(async () => {
     const url = r.request().url();
     if (url.includes('/api/auth/session')) return r.fulfill({ json: { accessToken: 'tok' } });
     if (r.request().method() === 'PATCH') return deleted.push(`chatgpt ${url.split('/').pop()} ${r.request().headers().authorization}`), r.fulfill({ json: {} });
+    if (url.endsWith('/backend-api/files/library')) {
+      const ids = ['file_upload', ...Array.from({ length: 9 }, (_, i) => `file_gen${i + 1}`)];
+      return r.fulfill({ json: { cursor: null, items: ids.map((f) => ({ id: `libfile_${f}`, file_id: f, directory_id: 'libdir_root', file_name: `${f}.png` })) } });
+    }
+    if (url.endsWith('/delete-batch')) return deleted.push(`library ${JSON.parse(r.request().postData()).files.map((f) => f.library_file_id).sort()}`), r.fulfill({ json: {} });
     if (url.includes('/backend-api/')) return r.fulfill({ body: PNG, contentType: 'image/png' });
     r.fulfill({ body: loggedIn ? MOCK : '<h1>Log in</h1>', contentType: 'text/html' });
   });
@@ -62,6 +67,7 @@ test('multi-angle job runs through ChatGPT tab and saves every image', { skip: !
   assert.equal(done.outputs.length, 2);
   for (const o of done.outputs) assert.deepEqual(fs.readFileSync(path.join(srv.store.filesDir, job.id, o.file)), PNG);
   assert.ok(deleted.includes('chatgpt abc Bearer tok'), 'ChatGPT chat deleted after the job');
+  assert.ok(deleted.includes('library libfile_file_gen1,libfile_file_gen2,libfile_file_upload'), `library files deleted: ${deleted}`);
 });
 
 test('drawing job: Claude writes the prompt from all photos, ChatGPT draws it, both chats deleted', { skip: !chromium }, async () => {

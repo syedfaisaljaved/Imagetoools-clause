@@ -160,19 +160,44 @@ async function textStep(step) {
   return { text: text.replace(/^Claude responded:[^\n]*\n+/, '').replace(/^```\w*\n?|```$/g, '').trim() };
 }
 
-// ---------- Cleanup: delete the chat so history / image library don't fill up ----------
+// ---------- Cleanup: delete the chat and its images so history / image library don't fill up ----------
+
+// ChatGPT files shown in this chat (our uploads + generated images), by their file id.
+const chatFileIds = () =>
+  new Set($$('main img').map((img) => { try { return new URL(img.src).searchParams.get('id'); } catch { return null; } }).filter((id) => id?.startsWith('file')));
+
+// Moves those files from ChatGPT's library to its trash (auto-emptied after 30 days).
+// The library indexes new files with a short delay, so look a few times.
+async function deleteLibraryFiles(ids, headers) {
+  for (let attempt = 0; attempt < 4 && ids.size; attempt++) {
+    if (attempt) await sleep(5000);
+    const found = [];
+    let cursor = null;
+    for (let page = 0; page < 10 && found.length < ids.size; page++) {
+      const r = await (await fetch('/backend-api/files/library', {
+        method: 'POST', headers,
+        body: JSON.stringify({ cursor, limit: 50, categories: [], include_hidden_files: true, include_saved_entities: true, include_sites: false, providers: [], ranking: 'suggested', source: null, trashed_only: false }),
+      })).json();
+      found.push(...(r.items || []).filter((i) => ids.has(i.file_id)));
+      if (!(cursor = r.cursor)) break;
+    }
+    if (!found.length) continue;
+    await fetch('/backend-api/files/library/files/delete-batch', {
+      method: 'POST', headers,
+      body: JSON.stringify({ files: found.map((i) => ({ library_file_id: i.id, file_id: i.file_id, parent_directory_id: i.directory_id, file_name: i.file_name })) }),
+    });
+    for (const i of found) ids.delete(i.file_id);
+  }
+}
 
 async function deleteChat() {
   try {
     if (SITE === 'chatgpt') {
-      const id = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
-      if (!id) return;
       const { accessToken } = await (await fetch('/api/auth/session')).json();
-      await fetch(`/backend-api/conversation/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ is_visible: false }),
-      });
+      const headers = { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` };
+      const id = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
+      if (id) await fetch(`/backend-api/conversation/${id}`, { method: 'PATCH', headers, body: JSON.stringify({ is_visible: false }) });
+      await deleteLibraryFiles(chatFileIds(), headers);
     } else {
       const id = location.pathname.match(/\/chat\/([\w-]+)/)?.[1];
       if (!id) return;

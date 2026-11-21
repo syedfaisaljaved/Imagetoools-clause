@@ -15,7 +15,7 @@
     const text = ed.innerText;
     ed.innerText = ''; send.disabled = true;
     history.pushState({}, '', '/c/abc');
-    main.insertAdjacentHTML('beforeend', `<article><div data-message-author-role="user">${text}</div><img alt="Uploaded image" src="/backend-api/estuary/content?id=upload"></article>`);
+    main.insertAdjacentHTML('beforeend', `<article><div data-message-author-role="user">${text}</div><img alt="Uploaded image" src="/backend-api/estuary/content?id=file_upload"></article>`);
     const stop = Object.assign(document.createElement('button'), { textContent: 'Stop' });
     stop.dataset.testid = 'stop-button';
     document.body.append(stop);
@@ -23,7 +23,7 @@
       stop.remove();
       main.insertAdjacentHTML('beforeend', /REFUSE/.test(text)
         ? `<article data-message-author-role="assistant">I can't create that image.</article>`
-        : `<article data-message-author-role="assistant"><img alt="Generated image" src="/backend-api/estuary/content?id=${++n}"></article>`);
+        : `<article data-message-author-role="assistant"><img alt="Generated image" src="/backend-api/estuary/content?id=file_gen${++n}"></article>`);
     }, 800);
   };
 </script></body></html>
