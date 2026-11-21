@@ -43,8 +43,12 @@ async function arrange(startup) {
     const windowId = !tab ? (await chrome.windows.create({ url })).id
       : shared ? (await chrome.windows.create({ tabId: tab.id })).id
       : tab.windowId;
-    // Bounds are applied after creation (create() rejects them while the screen is still initialising).
-    await chrome.windows.update(windowId, { left: 0, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
+    // Bounds are applied after creation (create() rejects them while the screen is still initialising),
+    // and only when they differ: any update raises the window above the one the user is looking at.
+    const win = await chrome.windows.get(windowId);
+    if (win.left || win.top || win.width !== W || win.height !== H || win.state !== 'normal') {
+      await chrome.windows.update(windowId, { left: 0, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
+    }
   }
 }
 // Runs whenever the worker starts and then every minute (the tabs' polling keeps the worker alive).
