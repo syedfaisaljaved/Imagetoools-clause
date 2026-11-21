@@ -219,9 +219,10 @@ async function deleteChat(job) {
       const { accessToken } = await (await fetch('/api/auth/session')).json();
       const headers = { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` };
       const chatId = location.pathname.match(/\/c\/([\w-]+)/)?.[1];
-      if (chatId) await fetch(`/backend-api/conversation/${chatId}`, { method: 'PATCH', headers, body: JSON.stringify({ is_visible: false }) });
       const uploadNames = new Set(job.steps.flatMap((s) => s.images.map((i) => i.name)));
+      // Files first: a hidden chat's images drop out of the image-gen list we use to find them.
       await api('/agent/log', { msg: `${job.id} ${await deleteLibraryFiles({ chatId, since: job.since, uploadNames, headers })}` });
+      if (chatId) await fetch(`/backend-api/conversation/${chatId}`, { method: 'PATCH', headers, body: JSON.stringify({ is_visible: false }) });
     } else {
       const id = location.pathname.match(/\/chat\/([\w-]+)/)?.[1];
       if (!id) return;
