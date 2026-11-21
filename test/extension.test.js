@@ -76,7 +76,7 @@ test('drawing job: Claude writes the prompt from all photos, ChatGPT draws it, b
 test('two-image fabric job completes; ChatGPT refusal is reported as failure', { skip: !chromium }, async () => {
   const ok = srv.store.create('fabric', { furniture: img, fabric: img }, {});
   assert.equal((await waitJob(ok.id)).status, 'done');
-  await page.waitForURL('https://chatgpt.com/'); // agent returned to a fresh chat (new document)
+  await page.waitForURL('https://chatgpt.com/?temporary-chat=true'); // agent returned to a fresh temporary chat
   const bad = srv.store.create('restyle', { furniture: img }, { notes: 'REFUSE' });
   const failed = await waitJob(bad.id);
   assert.equal(failed.status, 'failed');

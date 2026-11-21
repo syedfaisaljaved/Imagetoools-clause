@@ -23,7 +23,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 // Separate windows both stay "visible", so neither page gets throttled or paused.
 const W = 1280, H = 960;
 const LAYOUT = [
-  { match: 'https://chatgpt.com/', url: 'https://chatgpt.com/' },
+  { match: 'https://chatgpt.com/', url: 'https://chatgpt.com/?temporary-chat=true' },
   { match: 'https://claude.ai/', url: 'https://claude.ai/new' },
 ];
 async function arrange(createMissing) {
