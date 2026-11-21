@@ -67,4 +67,7 @@ test('submit restyle job → agent finishes it → result thumbnail shown', { sk
   assert.equal(await page.locator('#agents [data-site=chatgpt]').getAttribute('data-state'), 'busy'); // agent last reported busy
   await page.click('img[alt="result 1"]');
   assert.equal(await page.locator('#viewer').isVisible(), true); // tap a result → full-screen viewer
+  await page.click('#viewer [data-close]');
+  await page.click('.job .ins button >> nth=0'); // uploaded photo opens in the same viewer
+  assert.match(await page.locator('#viewer-img').getAttribute('src'), /in-furniture\.png$/);
 });

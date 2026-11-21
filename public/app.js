@@ -189,7 +189,7 @@ const jobHtml = (j) => {
         <button class="btn btn-ghost btn-icon" data-act="delete" data-id="${j.id}" title="Delete" aria-label="Delete">${ICON.trash}</button></div>`}
     </div>
     ${active ? `<div class="progress"><i style="width:${Math.max(pct, 4)}%"></i></div>` : ''}
-    <div class="ins">${Object.values(j.inputs).flat().map((f) => `<img src="/files/${j.id}/${f}" alt="input" loading="lazy">`).join('')}</div>
+    <div class="ins">${Object.values(j.inputs).flat().map((f) => `<button type="button" data-view="/files/${j.id}/${f}" title="View uploaded image"><img src="/files/${j.id}/${f}" alt="input" loading="lazy"></button>`).join('')}</div>
     ${outs.length ? `<div class="grid">${outs.map((o) => o.file
       ? `<button type="button" data-view="/files/${j.id}/${o.file}"><img src="/files/${j.id}/${o.file}" alt="result ${o.step + 1}" loading="lazy"></button>`
       : `<div class="fail">✕ ${esc(o.error)}</div>`).join('')}</div>` : ''}
