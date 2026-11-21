@@ -26,22 +26,27 @@ const LAYOUT = [
   { match: 'https://chatgpt.com/', url: 'https://chatgpt.com/?temporary-chat=true' },
   { match: 'https://claude.ai/', url: 'https://claude.ai/new' },
 ];
-async function arrange(createMissing) {
+const missing = {}; // consecutive runs a site had no tab
+async function arrange(startup) {
   const tabs = await chrome.tabs.query({});
   for (const [i, { match, url }] of LAYOUT.entries()) {
-    const tab = tabs.find((t) => t.url?.startsWith(match));
+    const site = tabs.filter((t) => (t.url || t.pendingUrl)?.startsWith(match));
+    // Idle duplicates (e.g. restored after a crash) just compete for jobs: close them.
+    for (const dup of site.slice(1)) if (dup.url === url) await chrome.tabs.remove(dup.id).catch(() => {});
+    const tab = site[0];
+    // Mid-login a tab is briefly on another domain: only re-create a window at startup or after 3 empty minutes.
+    missing[match] = tab ? 0 : (missing[match] || 0) + 1;
+    if (!tab && !startup && missing[match] < 3) continue;
     // Sharing a window with the other site would hide one of them: give the second site its own window.
     const shared = tab && i > 0 && tabs.some((t) => t.windowId === tab.windowId && t.url?.startsWith(LAYOUT[0].match));
-    const windowId = !tab ? createMissing && (await chrome.windows.create({ url })).id
+    const windowId = !tab ? (await chrome.windows.create({ url })).id
       : shared ? (await chrome.windows.create({ tabId: tab.id })).id
       : tab.windowId;
     // Bounds are applied after creation (create() rejects them while the screen is still initialising).
-    if (windowId) await chrome.windows.update(windowId, { left: i * W, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
+    await chrome.windows.update(windowId, { left: i * W, top: 0, width: W, height: H, state: 'normal' }).catch(() => {});
   }
 }
-// Missing windows are only created at startup: mid-login a tab may briefly be on another domain.
-const arrangeSoon = () => setTimeout(() => arrange(true).catch(console.warn), 5000); // let startup tabs load first
-chrome.runtime.onStartup.addListener(arrangeSoon);
-chrome.runtime.onInstalled.addListener(arrangeSoon);
-chrome.alarms.create('arrange', { periodInMinutes: 1 });
-chrome.alarms.onAlarm.addListener(() => arrange(false).catch(console.warn));
+// Runs whenever the worker starts and then every minute (the tabs' polling keeps the worker alive).
+const safeArrange = (startup) => arrange(startup).catch((e) => console.warn('[ImageTools] arrange', e));
+setTimeout(() => safeArrange(true), 5000); // let startup tabs load first
+setInterval(() => safeArrange(false), 60e3);
