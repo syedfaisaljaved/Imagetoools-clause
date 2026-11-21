@@ -112,7 +112,7 @@ test('factory photo is copied into the job and sent to the agent', async () => {
   assert.equal(job.inputs.factory, 'in-factory.jpg');
   const { job: w } = await (await call(agent, '/agent/next?site=chatgpt&agent=f')).json();
   assert.equal(w.id, job.id);
-  assert.deepEqual(w.steps[0].images.map((i) => [i.name, i.type]), [['in-product.png', 'image/png'], ['in-factory.jpg', 'image/jpeg']]);
+  assert.deepEqual(w.steps[0].images.map((i) => [i.name, i.type]), [[`${job.id}-in-product.png`, 'image/png'], [`${job.id}-in-factory.jpg`, 'image/jpeg']]);
   assert.ok(w.steps[0].images[1].data.length > 100000);
   await call(agent, `/agent/jobs/${job.id}/finish`, { error: 'test done' });
 });

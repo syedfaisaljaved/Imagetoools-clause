@@ -14,11 +14,16 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 
-export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join(ROOT, 'data'), password = '', vncPort = 6080 } = {}) {
+export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join(ROOT, 'data'), password = '', vncPort = 6080, parallel = 3 } = {}) {
   const store = createStore(dataDir);
   const SITES = ['chatgpt', 'claude'];
-  const agents = Object.fromEntries(SITES.map((s) => [s, { state: 'offline', note: '', lastSeen: 0 }]));
+  // Each browser tab is one agent; a site runs as many jobs at once as it has working tabs.
+  const agents = Object.fromEntries(SITES.map((s) => [s, new Map()])); // site → agentId → { state, note, lastSeen }
   const siteParam = (url) => (SITES.includes(url.searchParams.get('site')) ? url.searchParams.get('site') : 'chatgpt');
+  const seen = (url, patch) => {
+    const tabs = agents[siteParam(url)], id = url.searchParams.get('agent') || '';
+    tabs.set(id, { ...tabs.get(id), ...patch, lastSeen: Date.now() });
+  };
   const token = password && createHash('sha256').update('imgtools:' + password).digest('hex');
 
   const send = (res, code, body, type = 'application/json') => {
@@ -53,14 +58,21 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
       index: from + i,
       prompt: prompt.replaceAll('{{text}}', store.lastText(job)),
       images: images.flatMap((key) => [job.inputs[key]].flat()).map((name) => ({
-        name,
+        name: `${job.id}-${name}`, // unique per job, so parallel jobs' library cleanups never touch each other's uploads
         type: TYPES[path.extname(name)],
         data: fs.readFileSync(path.join(store.filesDir, job.id, name)).toString('base64'),
       })),
     })),
   });
-  const agentStatus = () =>
-    Object.fromEntries(SITES.map((s) => [s, { ...agents[s], state: Date.now() - agents[s].lastSeen < 20e3 ? agents[s].state : 'offline' }]));
+  // Per site: working tabs (ready/busy) win over tabs stuck on a login page.
+  const agentStatus = () => Object.fromEntries(SITES.map((s) => {
+    for (const [id, a] of agents[s]) if (Date.now() - a.lastSeen > 300e3) agents[s].delete(id);
+    const alive = [...agents[s].values()].filter((a) => Date.now() - a.lastSeen < 20e3);
+    const working = alive.filter((a) => a.state !== 'login');
+    const busy = working.filter((a) => a.state === 'busy').length;
+    const state = working.length ? (busy === working.length ? 'busy' : 'ready') : alive.length ? 'login' : 'offline';
+    return [s, { state, tabs: working.length, busy, note: state === 'login' ? alive[0].note : '' }];
+  }));
   // Site whose window the user wants in front of the remote screen; handed to that site's tab on its next poll.
   let front = null;
   // Recent agent log lines (cleanup results, failures) for remote debugging: GET /api/logs.
@@ -90,15 +102,15 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
   const agentRoutes = [
     ['GET', /^\/agent\/next$/, (req, res, url) => {
       const site = siteParam(url), run = store.claimNext(site, url.searchParams.get('agent') || '');
-      Object.assign(agents[site], { state: run ? 'busy' : 'ready', note: '', lastSeen: Date.now() });
+      seen(url, { state: run ? 'busy' : 'ready', note: '' });
       send(res, 200, { job: run ? agentJob(run) : null, front: takeFront(site) });
     }],
     ['POST', /^\/agent\/status$/, async (req, res, url) => {
-      const site = siteParam(url), { state, note = '' } = await readJson(req), a = agents[site];
-      // An extra logged-out tab must not hide a working one.
-      if (a.state === 'offline' || a.state === state || Date.now() - a.lastSeen > 10e3) Object.assign(a, { state, note: String(note).slice(0, 300), lastSeen: Date.now() });
-      send(res, 200, { ok: true, front: takeFront(site) });
+      const { state, note = '' } = await readJson(req);
+      seen(url, { state, note: String(note).slice(0, 300) });
+      send(res, 200, { ok: true, front: takeFront(siteParam(url)) });
     }],
+    ['GET', /^\/agent\/config$/, (req, res) => send(res, 200, { parallel })],
     ['POST', /^\/agent\/log$/, async (req, res, url) => {
       const { msg } = await readJson(req, 1e4);
       logs.push(`${new Date().toISOString()} ${siteParam(url)}: ${String(msg).slice(0, 500)}`);
@@ -107,7 +119,7 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     }],
     ['POST', /^\/agent\/jobs\/(\w+)\/output$/, async (req, res, url, id) => {
       const { step, image, text, error } = await readJson(req);
-      agents[siteParam(url)].lastSeen = Date.now();
+      seen(url, {});
       store.addOutput(id, step, { image, text: text && String(text).slice(0, 20000), error });
       send(res, 200, { ok: true });
     }],

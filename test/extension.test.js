@@ -19,7 +19,7 @@ let srv, ctx, page, loggedIn = true;
 
 before(async () => {
   if (!chromium) return;
-  srv = startServer({ port: 18180, agentPort: 8081, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'imgt-')) });
+  srv = startServer({ port: 18180, agentPort: 8081, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'imgt-')), parallel: 2 });
   ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(os.tmpdir(), 'prof-')), {
     channel: 'chromium',
     args: [`--disable-extensions-except=${ROOT}/extension`, `--load-extension=${ROOT}/extension`],
@@ -33,7 +33,7 @@ before(async () => {
     if (url.endsWith('/backend-api/files/library')) {
       const now = new Date().toISOString(), old = '2020-01-01T00:00:00Z';
       const items = [...gens.map((f) => ({ file_id: f, file_name: `${f}.png`, record_creation_time: now })),
-        { file_id: 'file_up', file_name: 'in-product.png', record_creation_time: now }, // this job's upload
+        { file_id: 'file_up', file_name: `${srv.store.list()[0]?.id}-in-product.png`, record_creation_time: now }, // latest job's upload
         { file_id: 'file_old', file_name: 'in-product.png', record_creation_time: old }]; // the user's older file: keep
       return r.fulfill({ json: { cursor: null, items: items.map((i) => ({ ...i, id: `libfile_${i.file_id}`, directory_id: 'libdir_root' })) } });
     }
@@ -50,10 +50,11 @@ before(async () => {
   });
   page = await ctx.newPage();
   await page.goto('https://chatgpt.com/');
-  // The extension opens a claude.ai window by itself; make sure that page exists before tests start.
-  let claude;
-  for (let i = 0; i < 80 && !(claude = ctx.pages().find((p) => p.url().startsWith('https://claude.ai'))); i++) await new Promise((r) => setTimeout(r, 250));
-  await claude.goto('https://claude.ai/new'); // windows opened by the extension skip Playwright routing on first load
+  // The extension opens the other windows (2 per site) by itself; wait for them, then reload each one,
+  // because windows opened by the extension skip Playwright routing on their first load.
+  const site = (host) => ctx.pages().filter((p) => p.url().includes(host));
+  for (let i = 0; i < 80 && (site('chatgpt.com').length < 2 || site('claude.ai').length < 2); i++) await new Promise((r) => setTimeout(r, 250));
+  for (const p of [...site('chatgpt.com'), ...site('claude.ai')]) if (p !== page) await p.goto(p.url().includes('claude') ? 'https://claude.ai/new' : 'https://chatgpt.com/');
 });
 after(async () => { await ctx?.close(); srv?.close(); });
 
@@ -98,9 +99,22 @@ test('two-image fabric job completes; ChatGPT refusal is reported as failure', {
   assert.match(failed.outputs[0].error, /can't create/);
 });
 
+test('jobs run in parallel, one per window', { skip: !chromium }, async () => {
+  const jobs = [1, 2].map(() => srv.store.create('restyle', { furniture: img }, {}));
+  let together = false;
+  for (let i = 0; i < 120 && !together; i++) {
+    together = jobs.every((j) => srv.store.get(j.id).status === 'running');
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  assert.ok(together, 'both jobs were running at the same time');
+  const state = await (await fetch('http://127.0.0.1:18180/api/state')).json();
+  assert.equal(state.agents.chatgpt.tabs, 2);
+  for (const j of jobs) assert.equal((await waitJob(j.id)).status, 'done');
+});
+
 test('logged-out page reports "login" state', { skip: !chromium }, async () => {
   loggedIn = false;
-  await page.goto('https://chatgpt.com/');
+  for (const p of ctx.pages().filter((p) => p.url().includes('chatgpt.com'))) await p.goto('https://chatgpt.com/');
   await page.waitForTimeout(16000); // a fresh "ready" from the same site is trusted for 10s
   const state = await (await fetch('http://127.0.0.1:18180/api/state')).json();
   assert.equal(state.agents.chatgpt.state, 'login');

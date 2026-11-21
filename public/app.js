@@ -162,8 +162,9 @@ $('#agents').onclick = (e) => {
 
 function renderAgents(agents) {
   $('#agents').innerHTML = Object.entries(SITES).map(([site, label]) => {
-    const s = agents[site].state;
-    return `<a class="status" href="${VNC}" target="_blank" data-site="${site}" data-state="${s}" title="${label}: ${STATE[s] || s}"><span class="dot ${DOT[s] || ''}"></span>${label}</a>`;
+    const { state: s, tabs, busy } = agents[site];
+    const load = tabs > 1 ? ` <span class="muted">${busy}/${tabs}</span>` : '';
+    return `<a class="status" href="${VNC}" target="_blank" data-site="${site}" data-state="${s}" title="${label}: ${STATE[s] || s}${tabs ? ` · ${busy} of ${tabs} windows working` : ''}"><span class="dot ${DOT[s] || ''}"></span>${label}${load}</a>`;
   }).join('');
   const notes = Object.entries(agents).filter(([, a]) => a.state === 'login').map(([s, a]) => `${SITES[s]}: ${a.note}`).join(' · ');
   $('#note').textContent = notes;

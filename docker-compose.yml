@@ -2,9 +2,10 @@ services:
   app:
     build: .
     restart: unless-stopped
-    shm_size: 1gb
+    shm_size: 2gb
     environment:
       APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD in .env}
+      PARALLEL: ${PARALLEL:-3} # jobs at once per site (browser windows each for ChatGPT and Claude)
     volumes:
       - data:/data
     ports:
