@@ -113,16 +113,16 @@ const jobHtml = (j) => {
   const name = tools.find((t) => t.id === j.tool)?.name || j.tool;
   const done = j.outputs.filter((o) => o.file).length;
   const progress = j.status === 'running' || (j.status === 'queued' && j.outputs.length) ? ` ${j.outputs.length}/${j.total}` : '';
+  const outputs = j.outputs.filter((o) => !o.text);
   return `<article class="job">
     <div class="row">
-      <b>${esc(name)}</b><span class="badge ${j.status}">${j.status}${progress}</span>
-      <small class="muted">${new Date(j.createdAt).toLocaleString()}</small>
-      <span class="grow"></span>
-      ${j.status === 'running' ? '' : `<button data-act="retry" data-id="${j.id}">Run again</button><button data-act="delete" data-id="${j.id}" class="ghost">Delete</button>`}
+      <div class="title"><b>${esc(name)}</b> <span class="badge ${j.status}">${j.status}${progress}</span>
+        <small class="muted">${new Date(j.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</small></div>
+      ${j.status === 'running' ? '' : `<div class="actions"><button data-act="retry" data-id="${j.id}">Run again</button><button data-act="delete" data-id="${j.id}" class="ghost">Delete</button></div>`}
     </div>
-    <div class="thumbs">
-      ${Object.values(j.inputs).flat().map((f) => `<img class="in" src="/files/${j.id}/${f}" alt="input">`).join('')}
-      ${j.outputs.filter((o) => !o.text).map((o) => o.file
+    <div class="ins">${Object.values(j.inputs).flat().map((f) => `<img src="/files/${j.id}/${f}" alt="input">`).join('')}</div>
+    <div class="results ${outputs.length ? '' : 'empty'}">
+      ${outputs.map((o) => o.file
         ? `<a href="/files/${j.id}/${o.file}" target="_blank" download><img src="/files/${j.id}/${o.file}" alt="result ${o.step + 1}" loading="lazy"></a>`
         : `<div class="fail" title="${esc(o.error)}">✕ ${esc(o.error)}</div>`).join('')}
     </div>
