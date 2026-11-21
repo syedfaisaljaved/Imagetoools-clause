@@ -124,24 +124,29 @@ export const tools = [
   {
     id: 'drawing',
     name: 'Drawing',
-    description: 'One or more product photos → Claude writes the drawing prompt → ChatGPT draws it.',
+    description: 'Product photo(s) → Claude writes the drawing prompt → ChatGPT draws it. Optionally one drawing per part.',
     inputs: [{ key: 'photos', label: 'Product photo(s)', multiple: true }],
     fields: [
+      { key: 'parts', label: 'Specific parts (optional, comma-separated — one drawing each)', type: 'text', placeholder: 'e.g. headboard, footboard' },
       { key: 'instructions', label: 'Claude instructions (saved in this browser)', type: 'textarea', default: DRAWING_INSTRUCTIONS },
       { key: 'notes', label: 'Notes (optional)', type: 'text' },
       FACTORY_FIELD,
     ],
-    build: ({ instructions, notes, factory }) => [
-      {
-        site: 'claude',
-        images: ['photos'],
-        prompt: `${instructions.trim()}${extra(notes)}\n\nReply with ONLY the final image prompt — no introduction, no headings, no explanation.`,
-      },
-      {
-        images: plusFactory(['photos'], factory),
-        prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product.${factory ? ` Instead of a plain background, show it ${FACTORY}.` : ''} ${NOW}`,
-      },
-    ],
+    // Per part: Claude writes the prompt from the photos, then ChatGPT draws it from that prompt + the photos.
+    build: ({ parts, instructions, notes, factory }) => {
+      const list = parts.split(',').map((p) => p.trim()).filter(Boolean).slice(0, 8);
+      return (list.length ? list : [null]).flatMap((part) => [
+        {
+          site: 'claude',
+          images: ['photos'],
+          prompt: `${instructions.trim()}${part ? `\n\nIMPORTANT: the drawing must show ONLY the ${part} of this product, isolated on its own (not the whole piece). Describe the ${part} in full detail exactly as seen in the photos: shape, proportions, carving and ornament, joinery.` : ''}${extra(notes)}\n\nReply with ONLY the final image prompt — no introduction, no headings, no explanation.`,
+        },
+        {
+          images: plusFactory(['photos'], factory),
+          prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product${part ? ` — draw only its ${part}` : ''}.${factory ? ` Instead of a plain background, show it ${FACTORY}.` : ''} ${NOW}`,
+        },
+      ]);
+    },
   },
   {
     id: 'wood',

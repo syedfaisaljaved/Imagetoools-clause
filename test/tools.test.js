@@ -48,3 +48,11 @@ test('factory showcase: one phone-style shot per pose, factory attached on the f
   assert.match(steps[1].prompt, /directly above.*overcast/s);
   assert.throws(() => buildSteps('showcase', { product: 'a' }, { shots: [] }), /at least one/);
 });
+
+test('drawing with parts: Claude then ChatGPT for each part, each prompt about that part', () => {
+  const steps = buildSteps('drawing', { photos: ['a'] }, { parts: 'headboard, footboard ,' });
+  assert.deepEqual(steps.map((s) => s.site), ['claude', 'chatgpt', 'claude', 'chatgpt']);
+  assert.match(steps[0].prompt, /ONLY the headboard/);
+  assert.match(steps[3].prompt, /^\{\{text\}\}[\s\S]*draw only its footboard/);
+  assert.equal(buildSteps('drawing', { photos: ['a'] }, {}).length, 2); // no parts → one drawing of the whole product
+});

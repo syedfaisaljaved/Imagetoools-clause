@@ -75,6 +75,21 @@ test('drawing job runs on Claude first, then ChatGPT gets the Claude prompt + al
   assert.equal(state.jobs.find((j) => j.id === job.id).status, 'done');
 });
 
+test('drawing per part alternates Claude and ChatGPT, each ChatGPT step gets its own Claude prompt', async () => {
+  const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`] }, options: { parts: 'headboard, footboard' } })).json();
+  for (const [i, part] of ['headboard', 'footboard'].entries()) {
+    const { job: c } = await (await call(agent, '/agent/next?site=claude&agent=c')).json();
+    assert.equal(c.steps[0].index, i * 2);
+    await call(agent, `/agent/jobs/${job.id}/output?site=claude`, { step: i * 2, text: `Draw the ${part}` });
+    await call(agent, `/agent/jobs/${job.id}/finish?site=claude`, {});
+    const { job: g } = await (await call(agent, '/agent/next?site=chatgpt&agent=g')).json();
+    assert.match(g.steps[0].prompt, new RegExp(`^Draw the ${part}\\n`));
+    await call(agent, `/agent/jobs/${job.id}/output`, { step: i * 2 + 1, image: PNG });
+    await call(agent, `/agent/jobs/${job.id}/finish`, {});
+  }
+  assert.equal(srv.store.get(job.id).status, 'done');
+});
+
 test('Claude failure fails the whole job; a second tab polling does not interrupt a running job', async () => {
   const job = await (await call(app, '/api/jobs', { tool: 'drawing', images: { photos: [`data:image/png;base64,${PNG}`] } })).json();
   await call(agent, '/agent/next?site=claude&agent=c1');
