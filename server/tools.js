@@ -21,6 +21,9 @@ const BACKGROUNDS = {
 // Where products stand in the factory: right in front of the back wall, seen from a distance.
 const WALL = 'standing on the courtyard floor about 1 to 1.5 metres in front of the white plastered back wall (a clear gap of floor between furniture and wall, not pushed against it). Framing is zoomed in and tightly cropped around the furniture: it spans about 70–80% of the frame width; behind it only the part of the white wall right behind the furniture shows (cropped well below the top of the wall, no sky or upper grey wall), at most a narrow strip of the brick side wall at the edge, and just a little floor below. TRUE REAL-WORLD SCALE: the back wall is about 3 metres high and each brick is about 7.5 cm tall, so the furniture keeps its real size relative to the wall and bricks — zoom in with the camera, never by enlarging the furniture. It must look like it was really photographed there, with matching perspective, light direction and soft contact shadows'
 const FACTORY = `placed in our factory shown in the factory photo (the last attached image): same walls, concrete floor, perspective and daylight, ${WALL}, with realistic contact shadows`;
+// Factory shots must pass as real photos: outdoor daylight physics instead of studio product lighting.
+const REAL = 'It must be indistinguishable from a real, unedited smartphone photo taken outdoors in this courtyard: natural daylight from above matching the factory photo — upward-facing surfaces (seat, top rail, arm tops) catch more light than vertical fronts, a darker crisp contact shadow sits right under and just behind the furniture on the floor, each material reacts to the light truthfully (velvet sheen and darker folds, fabric weave, wood grain, metal reflections), with slight natural imperfections. No studio lighting, no fill light, no even catalogue lighting, no CGI or 3D-render look, no over-smoothing.';
+const look = (factory) => (factory ? REAL : PHOTO);
 const FACTORY_FIELD = { key: 'factory', label: 'Factory background', type: 'checkbox' };
 const bg = (background, factory) => (factory ? FACTORY : BACKGROUNDS[background]);
 const plusFactory = (images, factory) => (factory ? [...images, 'factory'] : images);
@@ -100,7 +103,7 @@ function claudeDrawingTool({ id, name, description, instructions, finish, factor
         },
         {
           images: plusFactory(['photos'], factory),
-          prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product${part ? ` — draw only its ${part}` : ''}.${finish}${factory ? ` Instead of a plain background, show it ${FACTORY}.` : ''} ${NOW}`,
+          prompt: `{{text}}\n\nUse the attached product photo(s) as the exact reference for the product${part ? ` — draw only its ${part}` : ''}.${finish}${factory ? ` Instead of a plain background, show it ${FACTORY}. ${REAL}` : ''} ${NOW}`,
         },
       ]);
     },
@@ -122,7 +125,7 @@ export const tools = [
     build: ({ angles, background, notes, factory }) =>
       angles.map((a, i) => ({
         images: i === 0 ? plusFactory(['product'], factory) : [],
-        prompt: `${i === 0 ? 'The first image is a product photo.' : 'Same product and setting as before.'} Create a new image of this exact product shown as a ${ANGLES[a]}, ${bg(background, factory)}. ${KEEP} ${PHOTO}${extra(notes)} ${NOW}`,
+        prompt: `${i === 0 ? 'The first image is a product photo.' : 'Same product and setting as before.'} Create a new image of this exact product shown as a ${ANGLES[a]}, ${bg(background, factory)}. ${KEEP} ${look(factory)}${extra(notes)} ${NOW}`,
       })),
   },
   {
@@ -141,7 +144,7 @@ export const tools = [
     ],
     build: ({ area, background, notes, factory }) => [{
       images: plusFactory(['furniture', 'fabric'], factory),
-      prompt: `Image 1 is a piece of furniture. Image 2 is a fabric swatch. Re-upholster the furniture from image 1 using the fabric from image 2, applied to: ${area.toLowerCase()}. Match the fabric's exact color, pattern, scale and texture, wrapping naturally around curves, seams and cushions. ${KEEP} Keep the camera angle, wood/metal parts and finish unchanged, ${bg(background, factory)}. ${PHOTO}${extra(notes)} ${NOW}`,
+      prompt: `Image 1 is a piece of furniture. Image 2 is a fabric swatch. Re-upholster the furniture from image 1 using the fabric from image 2, applied to: ${area.toLowerCase()}. Match the fabric's exact color, pattern, scale and texture, wrapping naturally around curves, seams and cushions. ${KEEP} Keep the camera angle, wood/metal parts and finish unchanged, ${bg(background, factory)}. ${look(factory)}${extra(notes)} ${NOW}`,
     }],
   },
   {
@@ -165,7 +168,7 @@ export const tools = [
       ].filter(Boolean);
       return [{
         images: plusFactory(['furniture'], factory),
-        prompt: `Recreate the furniture from the first image with only these changes: ${changes.join('; ') || 'a fresh premium look'}. ${KEEP} Keep the same camera angle and framing, ${bg(background, factory)}. ${PHOTO}${extra(notes)} ${NOW}`,
+        prompt: `Recreate the furniture from the first image with only these changes: ${changes.join('; ') || 'a fresh premium look'}. ${KEEP} Keep the same camera angle and framing, ${bg(background, factory)}. ${look(factory)}${extra(notes)} ${NOW}`,
       }];
     },
   },
@@ -182,7 +185,7 @@ export const tools = [
     ],
     build: ({ wood, notes }) => [{
       images: ['product', 'factory'],
-      prompt: `Image 1 is a finished furniture product. Image 2 is our factory. Create a photorealistic photo of the bare wooden structure of this exact product as it looks mid-production: raw, unpolished, unfinished ${wood === 'Match the product' ? 'solid wood' : wood.toLowerCase() + ' wood'} (plywood only where a real frame would use it), with no upholstery, fabric, foam, cushions, paint, stain or varnish. Show visible joinery, dowels, screws, staples, natural wood grain, pencil marks and light sanding dust. Keep the exact same shape, proportions, dimensions and design details as the product so the frame clearly matches it. Place it ${FACTORY}. ${PHOTO}${extra(notes)} ${NOW}`,
+      prompt: `Image 1 is a finished furniture product. Image 2 is our factory. Create a photorealistic photo of the bare wooden structure of this exact product as it looks mid-production: raw, unpolished, unfinished ${wood === 'Match the product' ? 'solid wood' : wood.toLowerCase() + ' wood'} (plywood only where a real frame would use it), with no upholstery, fabric, foam, cushions, paint, stain or varnish. Show visible joinery, dowels, screws, staples, natural wood grain, pencil marks and light sanding dust. Keep the exact same shape, proportions, dimensions and design details as the product so the frame clearly matches it. Place it ${FACTORY}. ${REAL}${extra(notes)} ${NOW}`,
     }],
   },
   {
@@ -198,7 +201,7 @@ export const tools = [
     build: ({ shots, light, notes }) =>
       shots.map((shot, i) => ({
         images: i === 0 ? ['product', 'factory'] : [],
-        prompt: `${i === 0 ? 'Image 1 is our product. Image 2 is our factory courtyard.' : 'Same product, same factory courtyard, a new photo.'} Create a realistic photo of this exact product on the dusty, patchy concrete floor of the factory from image 2, ${WALL}. Shot ${SHOTS[shot]}. ${LIGHT[light]}. ${KEEP} ${PHONE}${extra(notes)} ${NOW}`,
+        prompt: `${i === 0 ? 'Image 1 is our product. Image 2 is our factory courtyard.' : 'Same product, same factory courtyard, a new photo.'} Create a realistic photo of this exact product on the dusty, patchy concrete floor of the factory from image 2, ${WALL}. Shot ${SHOTS[shot]}. ${LIGHT[light]}. ${KEEP} ${PHONE} ${REAL}${extra(notes)} ${NOW}`,
       })),
   },
 ];

@@ -70,3 +70,12 @@ test('restyle offers gold, champagne gold and silver polish', () => {
   assert.match(s.prompt, /wood\/metal polish → champagne gold/);
   for (const f of ['Gold', 'Silver']) assert.doesNotThrow(() => buildSteps('restyle', { furniture: 'a' }, { finish: f }));
 });
+
+test('factory shots use real-daylight wording, never studio product lighting', () => {
+  const [fac] = buildSteps('restyle', { furniture: 'a' }, { factory: true });
+  assert.match(fac.prompt, /indistinguishable from a real, unedited smartphone photo/);
+  assert.doesNotMatch(fac.prompt, /professional product photography/);
+  const [studio] = buildSteps('restyle', { furniture: 'a' }, {});
+  assert.match(studio.prompt, /professional product photography/);
+  assert.match(buildSteps('wood', { product: 'a' }, {})[0].prompt, /No studio lighting/);
+});
