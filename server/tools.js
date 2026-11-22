@@ -19,7 +19,7 @@ const BACKGROUNDS = {
   'Modern living room': 'placed in a bright, modern, minimal living room interior',
 };
 // Where products stand in the factory: right in front of the back wall, seen from a distance.
-const WALL = 'standing close to the white plastered back wall (about half a metre in front of it, not out in the middle of the courtyard), seen from a few metres back in a wide, zoomed-out shot: the full height of the back wall, the red brick side wall and plenty of concrete floor in front stay visible, and the product fills only about half of the frame height';
+const WALL = 'standing close to the white plastered back wall (about half a metre in front of it, not out in the middle of the courtyard), photographed from about 4 metres away at chest height in a wide, zoomed-out shot showing the full height of the back wall, the red brick side wall and plenty of concrete floor. TRUE REAL-WORLD SCALE: the back wall is about 3 metres high and each brick is about 7.5 cm tall, so the furniture keeps its real size — e.g. a sofa back (about 85 cm) reaches only roughly a quarter to a third of the wall height. Never enlarge the furniture to fill the frame; it must look like it was really photographed there, with matching perspective, light direction and soft contact shadows'
 const FACTORY = `placed in our factory shown in the factory photo (the last attached image): same walls, concrete floor, perspective and daylight, ${WALL}, with realistic contact shadows`;
 const FACTORY_FIELD = { key: 'factory', label: 'Factory background', type: 'checkbox' };
 const bg = (background, factory) => (factory ? FACTORY : BACKGROUNDS[background]);
