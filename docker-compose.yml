@@ -15,14 +15,5 @@ services:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate --url http://app:8080
-  # Optional fixed URL (https://<your-domain>.ngrok-free.app). Enabled by these lines in .env:
-  #   NGROK_AUTHTOKEN=...  NGROK_DOMAIN=...  COMPOSE_PROFILES=ngrok
-  ngrok:
-    image: ngrok/ngrok:latest
-    profiles: [ngrok]
-    restart: unless-stopped
-    environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
-    command: http --url=${NGROK_DOMAIN:-} app:8080
 volumes:
   data:

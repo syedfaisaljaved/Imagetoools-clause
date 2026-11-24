@@ -17,11 +17,12 @@ fi
 if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only; else git clone -b "$BRANCH" "$REPO" "$DIR"; fi
 cd "$DIR"
 [ -f .env ] || echo "APP_PASSWORD=$(openssl rand -hex 6)" > .env
-sudo docker compose up -d --build
+sed -i '/^NGROK_\|^COMPOSE_PROFILES=ngrok/d' .env # ngrok was removed
+sudo docker compose up -d --build --remove-orphans
 
 # Auto-update: every 5 min pull the branch and rebuild only when it changed.
 sudo tee /etc/cron.d/imagetools >/dev/null <<CRON
-*/5 * * * * root cd $DIR && OLD=\$(sudo -u $USER git rev-parse HEAD) && sudo -u $USER git pull -q --ff-only && [ "\$(sudo -u $USER git rev-parse HEAD)" != "\$OLD" ] && docker compose up -d --build >> /var/log/imagetools-update.log 2>&1
+*/5 * * * * root cd $DIR && OLD=\$(sudo -u $USER git rev-parse HEAD) && sudo -u $USER git pull -q --ff-only && [ "\$(sudo -u $USER git rev-parse HEAD)" != "\$OLD" ] && docker compose up -d --build --remove-orphans >> /var/log/imagetools-update.log 2>&1
 CRON
 
 echo "Waiting for public URL..."
