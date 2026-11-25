@@ -74,3 +74,26 @@ test('submit restyle job → agent finishes it → result thumbnail shown', { sk
   await page.locator('.upload[data-key=product] .thumb').waitFor();
   assert.equal(await page.locator('.tab[aria-selected=true]').textContent(), 'Raw wood');
 });
+
+test('image step captures a fast result when ChatGPT leaves its stop control visible', { skip: !chromium }, async () => {
+  const tab = await browser.newPage();
+  try {
+    // Use a child frame so the real content script runs without its background job polling loop.
+    await tab.goto(URL);
+    await tab.evaluate(() => document.body.append(document.createElement('iframe')));
+    const chat = tab.frames()[1];
+    await chat.setContent('<main></main><form><div contenteditable="true"></div></form><button data-testid="send-button">Send</button>');
+    await chat.addScriptTag({ path: path.resolve(import.meta.dirname, '../extension/content.js') });
+    const data = fs.readFileSync(ICON).toString('base64');
+    await chat.evaluate((png) => {
+      document.querySelector('button').onclick = () => {
+        document.querySelector('main').innerHTML = '<article data-message-author-role="assistant"><img alt="Generated image" src="data:image/png;base64,' + png + '"></article>';
+        document.querySelector('button').dataset.testid = 'stop-button';
+      };
+    }, data);
+    const result = await chat.evaluate(() => imageStep({ images: [], prompt: 'Generate a factory photo' }, new Set()));
+    assert.equal(result.image, data);
+  } finally {
+    await tab.close();
+  }
+});
