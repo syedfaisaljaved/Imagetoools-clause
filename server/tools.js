@@ -112,6 +112,14 @@ function claudeDrawingTool({ id, name, description, instructions, finish, factor
 
 export const tools = [
   {
+    id: 'generate',
+    name: 'Generate',
+    description: 'Your photos (optional) + your prompt → a new image.',
+    inputs: [{ key: 'photos', label: 'Reference photo(s) (optional)', multiple: true, optional: true }],
+    fields: [{ key: 'prompt', label: 'Prompt', type: 'prompt', placeholder: 'Describe the image you want…', required: true }],
+    build: ({ prompt }) => [{ images: ['photos'], prompt: `${prompt.trim()}\n\n${NOW}` }],
+  },
+  {
     id: 'angles',
     name: 'Multi-angle',
     description: 'One product photo → the same product from many angles.',
@@ -212,14 +220,15 @@ const byId = Object.fromEntries(tools.map((t) => [t.id, t]));
 export function buildSteps(toolId, images, options = {}) {
   const tool = byId[toolId === 'drawing' ? 'specs' : toolId]; // 'drawing' = specs sheet's old id (older jobs)
   if (!tool) throw new Error(`Unknown tool: ${toolId}`);
-  for (const { key, label } of tool.inputs) if (!images?.[key]?.length) throw new Error(`Missing image: ${label}`);
+  for (const { key, label, optional } of tool.inputs) if (!optional && !images?.[key]?.length) throw new Error(`Missing image: ${label}`);
   const opts = {};
   for (const f of tool.fields) {
     if (f.type === 'checkbox') { opts[f.key] = options[f.key] === true || options[f.key] === 'on'; continue; }
     const v = options[f.key] || f.default || '';
+    if (f.required && !String(v).trim()) throw new Error(`${f.label} is required`);
     if (f.type === 'select' && !f.options.includes(v)) throw new Error(`Invalid ${f.label}`);
     if (f.type === 'multi' && (!Array.isArray(v) || !v.length || v.some((x) => !f.options.includes(x)))) throw new Error(`Pick at least one: ${f.label}`);
-    opts[f.key] = /text/.test(f.type) ? String(v).slice(0, 4000) : v;
+    opts[f.key] = /text|prompt/.test(f.type) ? String(v).slice(0, 4000) : v;
   }
   return tool.build(opts).map((s) => ({ site: 'chatgpt', ...s }));
 }

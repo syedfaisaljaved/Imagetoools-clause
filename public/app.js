@@ -77,6 +77,7 @@ const field = (f) => {
   const control =
     f.type === 'select' ? `<select class="input" name="${f.key}">${f.options.map((o) => `<option ${o === f.default ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
     : f.type === 'multi' ? `<div class="chips">${f.options.map((o) => `<label><input type="checkbox" name="${f.key}" value="${esc(o)}" ${f.default?.includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`
+    : f.type === 'prompt' ? `<textarea class="input" name="${f.key}" rows="5" placeholder="${esc(f.placeholder)}" ${f.required ? 'required' : ''}></textarea>`
     : f.type === 'textarea' ? `<textarea class="input" name="${f.key}" rows="8">${esc(mem.get(`${tool.id}.${f.key}`) ?? f.default)}</textarea>`
     : `<input class="input" name="${f.key}" placeholder="${esc(f.placeholder)}" autocomplete="off">`;
   return `<label class="field"><span>${esc(f.label)}</span>${control}</label>`;

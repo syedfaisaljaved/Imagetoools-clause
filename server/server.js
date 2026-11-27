@@ -57,7 +57,7 @@ export function startServer({ port = 8080, agentPort = 8081, dataDir = path.join
     steps: job.steps.slice(from, to).map(({ prompt, images }, i) => ({
       index: from + i,
       prompt: prompt.replaceAll('{{text}}', store.lastText(job)),
-      images: images.flatMap((key) => [job.inputs[key]].flat()).map((name) => ({
+      images: images.flatMap((key) => [job.inputs[key]].flat()).filter(Boolean).map((name) => ({
         name: `${job.id}-${name}`, // unique per job, so parallel jobs' library cleanups never touch each other's uploads
         type: TYPES[path.extname(name)],
         data: fs.readFileSync(path.join(store.filesDir, job.id, name)).toString('base64'),

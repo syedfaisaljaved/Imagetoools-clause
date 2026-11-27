@@ -79,3 +79,11 @@ test('factory shots use real-daylight wording, never studio product lighting', (
   assert.match(studio.prompt, /professional product photography/);
   assert.match(buildSteps('wood', { product: 'a' }, {})[0].prompt, /No studio lighting/);
 });
+
+test('generate tool: user prompt + optional photos', () => {
+  const [s] = buildSteps('generate', { photos: ['a', 'b'] }, { prompt: '  A red chair in a garden ' });
+  assert.deepEqual(s.images, ['photos']);
+  assert.match(s.prompt, /^A red chair in a garden\n/);
+  assert.equal(buildSteps('generate', {}, { prompt: 'x' }).length, 1); // no photos is fine
+  assert.throws(() => buildSteps('generate', { photos: ['a'] }, { prompt: ' ' }), /Prompt is required/);
+});

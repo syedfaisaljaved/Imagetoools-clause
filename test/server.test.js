@@ -122,3 +122,12 @@ test('rejects bad input', async () => {
   assert.equal(r.status, 400);
   assert.match((await r.json()).error, /PNG, JPG or WEBP/);
 });
+
+test('generate job without photos sends the prompt alone', async () => {
+  const job = await (await call(app, '/api/jobs', { tool: 'generate', images: { photos: [] }, options: { prompt: 'A sofa on the moon' } })).json();
+  const { job: g } = await (await call(agent, '/agent/next?site=chatgpt&agent=x')).json();
+  assert.equal(g.id, job.id);
+  assert.deepEqual(g.steps[0].images, []);
+  assert.match(g.steps[0].prompt, /^A sofa on the moon/);
+  await call(agent, `/agent/jobs/${job.id}/finish`, { error: 'test done' });
+});
