@@ -9,7 +9,7 @@ const SEL = {
     leave: /^\/(c\/|$)/, // finished chat, or '/' with extra query params
     editor: '#prompt-textarea, .ProseMirror[contenteditable="true"], textarea[name="prompt-textarea"], form [contenteditable="true"], form textarea',
     send: '[data-testid="send-button"], #composer-submit-button, button[aria-label*="send" i]',
-    busy: '[data-testid="stop-button"], button[aria-label*="stop" i]',
+    busy: '[data-testid="stop-button"], button[aria-label="Stop" i], button[aria-label^="Stop generating" i], button[aria-label^="Stop streaming" i]',
     user: '[data-message-author-role="user"]',
     reply: '[data-message-author-role="assistant"]',
   },
@@ -84,7 +84,7 @@ function type(text) {
 async function send(text) {
   type(text);
   // Send stays disabled while uploads are in progress.
-  const btn = await waitFor(() => { const b = $(SEL.send); return b && !b.disabled && b; }, 120e3);
+  const btn = await waitFor(() => $$(SEL.send).find((b) => !b.disabled && !b.matches(SEL.busy) && b.getClientRects().length), 120e3);
   if (!btn) throw new Error('Send button never became ready (upload failed?)');
   btn.click();
 }
@@ -101,33 +101,37 @@ const submit = async (text) => (await send(text), waitReply());
 // Candidate result images, never our uploads (alt "Uploaded image", composer previews, user turns).
 const isUpload = (img) =>
   /upload/i.test(img.alt) || img.closest('form') || img.closest(SEL.user) || img.closest('article, [data-testid^="conversation-turn"]')?.querySelector(SEL.user);
-const resultImages = () => {
-  const imgs = $$('main img').filter((img) => !isUpload(img));
+const resultImages = (before) => {
+  const imgs = $$('main img').filter((img) => !before.has(img.src) && !isUpload(img));
   const generated = imgs.filter((img) => /generated image/i.test(img.alt));
   return generated.length ? generated : imgs.filter((img) => img.naturalWidth >= 400);
 };
 
-// Waits for an image not in `before` whose src stops changing (progressive previews settle into the final image).
-// Gives up after 90s if no new image appeared at all (image tool may start after the text reply).
-async function settledImage(before) {
-  const start = Date.now();
-  let last, stable = 0;
-  return waitFor(() => {
-    const cur = resultImages().filter((i) => !before.has(i.src)).at(-1);
-    if (!cur && Date.now() - start > 90e3) return 'none';
-    if (cur?.complete && cur.naturalWidth && cur.src === last) return ++stable >= 3 && cur;
-    last = cur?.src;
-    stable = 0;
-  }, 180e3, 1000).then((r) => (r === 'none' ? null : r));
-}
-
-// Base64 of the new result image; an image identical in size to one we uploaded is skipped, never returned.
+// Read the new image while ChatGPT is replying. Some layouts leave the stop control
+// on screen after the generated image is ready. Allow extra time for previews to settle.
 async function newImage(before, uploadSizes) {
-  for (let img; (img = await settledImage(before)); before.add(img.src)) {
-    const data = await toBase64(img.src);
-    if (!uploadSizes.has(data.length)) return data;
+  const started = Date.now();
+  const deadline = started + STEP_TIMEOUT;
+  let lastSrc, stableSince, idleSince = started;
+  while (Date.now() < deadline) {
+    const now = Date.now();
+    const busy = $$(SEL.busy).some((button) => !button.disabled && button.getClientRects().length);
+    if (busy) idleSince = now;
+    const img = resultImages(before).at(-1);
+    const src = img?.complete && img.naturalWidth ? img.src : '';
+    if (src !== lastSrc) {
+      lastSrc = src;
+      stableSince = now;
+    }
+    if (src && now - stableSince >= (busy ? 15000 : 3000)) {
+      const data = await toBase64(src);
+      if (img.src === src && data && !uploadSizes.has(data.length)) return data;
+      before.add(src);
+    }
+    if (!img && !busy && now - idleSince >= 90000) return null;
+    await sleep(1000);
   }
-  return null;
+  throw new Error('Timed out waiting for a completed ChatGPT image');
 }
 
 async function toBase64(src) {
@@ -145,14 +149,12 @@ async function toBase64(src) {
 }
 
 async function imageStep(step, uploadSizes) {
+  const before = new Set($$('main img').map((i) => i.src));
   if (step.images.length) attach(step.images);
   await send(step.prompt);
-  await sleep(3000); // our message and its uploads are on screen now: nothing visible yet is a result
-  const before = new Set($$('main img').map((i) => i.src));
-  await waitReply();
   let image = await newImage(before, uploadSizes);
   if (!image && !/limit|try again|can't|cannot|unable|not available/i.test(lastReply())) {
-    await submit('Yes — generate the image now exactly as described.'); // ChatGPT sometimes asks for confirmation
+    await send('Yes — generate the image now exactly as described.'); // ChatGPT sometimes asks for confirmation
     image = await newImage(before, uploadSizes);
   }
   if (!image) throw new Error(lastReply().slice(0, 400) || 'No image was generated');
